@@ -130,6 +130,9 @@ func buildConfirmHeader(req *ConfirmRequest) string {
 	if req.StatementType != "" {
 		line1 = append(line1, "Action: "+req.StatementType)
 	}
+	if len(req.MatchedKeywords) > 0 {
+		line1 = append(line1, "Keywords: "+strings.Join(req.MatchedKeywords, ", "))
+	}
 	if req.IsDDL {
 		line1 = append(line1, "DDL (auto-committed)")
 	}
