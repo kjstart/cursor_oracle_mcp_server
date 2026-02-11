@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/alvin/oracle-mcp-server/internal/audit"
 	"github.com/alvin/oracle-mcp-server/internal/config"
@@ -59,7 +60,8 @@ type initializeResult struct {
 }
 
 type serverCapability struct {
-	Tools *toolsCapability `json:"tools,omitempty"`
+	Tools   *toolsCapability `json:"tools,omitempty"`
+	Logging *struct{}        `json:"logging,omitempty"` // MCP logging: server can send notifications/message with level (debug, info, error, etc.)
 }
 
 type toolsCapability struct {
@@ -133,6 +135,13 @@ type Server struct {
 	mu     sync.Mutex
 
 	initialized bool
+
+	// verboseLogDedup avoids duplicate verbose log lines (e.g. when client triggers tool twice)
+	lastVerboseLog struct {
+		msg string
+		at  time.Time
+		mu  sync.Mutex
+	}
 }
 
 // NewServer creates a new MCP server.
@@ -163,7 +172,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	return &Server{
 		config:       cfg,
 		executorPool: executorPool,
-		analyzer:     sqlanalyzer.NewAnalyzer(cfg.Security.DangerKeywords),
+		analyzer:     sqlanalyzer.NewAnalyzer(cfg.Security.DangerKeywords, cfg.Security.DangerKeywordMatch),
 		confirmer:    confirm.NewConfirmer(),
 		auditor:      auditor,
 		reader:       bufio.NewReader(os.Stdin),
@@ -249,6 +258,7 @@ func (s *Server) handleInitialize(req *jsonRPCRequest) {
 			Tools: &toolsCapability{
 				ListChanged: false,
 			},
+			Logging: &struct{}{},
 		},
 		ServerInfo: serverInfo{
 			Name:    "oracle-mcp-server",
@@ -391,17 +401,32 @@ func (s *Server) handleExecuteSQL(req *jsonRPCRequest, args map[string]interface
 	// Log successful execution
 	s.logAudit(sql, analysis.MatchedKeywords, true, "SUCCESS", displayConnection)
 
+	if s.config.Logging.VerboseLogging {
+		msg := fmt.Sprintf("[debug] Execute Action: %s, Connection: %s\n", stmtType, displayConnection)
+		s.lastVerboseLog.mu.Lock()
+		dup := s.lastVerboseLog.msg == msg && time.Since(s.lastVerboseLog.at) < 2*time.Second
+		if !dup {
+			s.lastVerboseLog.msg = msg
+			s.lastVerboseLog.at = time.Now()
+		}
+		s.lastVerboseLog.mu.Unlock()
+		if !dup {
+			fmt.Fprint(os.Stderr, msg)
+		}
+	}
+
 	// Format and return result
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
 	s.sendToolResult(req.ID, string(resultJSON))
 }
 
 // handleListConnections handles the list_connections tool.
+// It retries previously failed connections and returns each connection with its availability status.
 func (s *Server) handleListConnections(req *jsonRPCRequest) {
-	names := s.executorPool.Names()
+	statuses := s.executorPool.ListConnectionsWithStatus()
 	out := map[string]interface{}{
-		"connections": names,
-		"message":     "Use these names as the 'connection' argument in execute_sql.",
+		"connections": statuses,
+		"message":     "Use these names as the 'connection' argument in execute_sql. Disabled connections are currently unreachable; they will be retried on each list_connections call.",
 	}
 	resultJSON, _ := json.MarshalIndent(out, "", "  ")
 	s.sendToolResult(req.ID, string(resultJSON))
@@ -467,6 +492,42 @@ func (s *Server) sendResponse(resp *jsonRPCResponse) {
 		return
 	}
 
+	s.writer.Write(data)
+	s.writer.Write([]byte("\n"))
+}
+
+// logNotificationParams is the params for MCP notifications/message (structured logging).
+type logNotificationParams struct {
+	Level  string      `json:"level"`
+	Logger string      `json:"logger"`
+	Data   interface{} `json:"data"`
+}
+
+// logNotificationMessage is a JSON-RPC notification for MCP logging (no id).
+type logNotificationMessage struct {
+	JSONRPC string                `json:"jsonrpc"`
+	Method  string                `json:"method"`
+	Params  logNotificationParams `json:"params"`
+}
+
+// sendLogNotification sends an MCP log notification so the client (e.g. Cursor) can show it with the correct level (debug/info/error).
+// Uses stdout as a proper JSON-RPC notification; do not use stderr for this so the client can display debug vs error correctly.
+func (s *Server) sendLogNotification(level, message string) {
+	msg := logNotificationMessage{
+		JSONRPC: "2.0",
+		Method:  "notifications/message",
+		Params: logNotificationParams{
+			Level:  level,
+			Logger: "oracle-mcp",
+			Data:   map[string]string{"message": message},
+		},
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
 	s.writer.Write(data)
 	s.writer.Write([]byte("\n"))
 }

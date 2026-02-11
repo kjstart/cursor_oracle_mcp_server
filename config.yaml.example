@@ -11,9 +11,13 @@ oracle:
 
 # Security Settings
 security:
+  # How to match danger_keywords: "whole_text" (default) or "tokens"
+  # whole_text: case-insensitive substring in full SQL (e.g. column "created_at" matches "create")
+  # tokens: exact token match after stripping strings/comments (e.g. "created_at" does not match "create")
+  danger_keyword_match: "whole_text"
+
   # List of keywords that trigger user confirmation
-  # Case-insensitive, supports multi-word keywords (e.g., "alter system")
-  # Matching is done on SQL tokens, not substrings
+  # Case-insensitive, supports multi-word keywords (e.g., "alter system", "execute immediate")
   danger_keywords:
     - truncate
     - drop
@@ -24,6 +28,7 @@ security:
     - revoke
     - create
     - update
+    - execute immediate
 
   # If true, all DDL statements (CREATE, DROP, ALTER, etc.) require confirmation
   # even if they don't match danger_keywords
@@ -33,6 +38,8 @@ security:
 logging:
   # Enable audit logging
   audit_log: true
-  
+  # When true, log one line per execute_sql: [debug] Execute Action: <type>, Connection: <name> (Cursor adds timestamp)
+  verbose_logging: true
+
   # Path to audit log file (relative to executable or absolute path)
   log_file: "audit.log"

@@ -30,13 +30,15 @@ type OracleConfig struct {
 // SecurityConfig holds security-related settings.
 type SecurityConfig struct {
 	DangerKeywords      []string `yaml:"danger_keywords"`
+	DangerKeywordMatch  string   `yaml:"danger_keyword_match"` // "whole_text" (default) or "tokens"
 	RequireConfirmForDDL bool    `yaml:"require_confirm_for_ddl"`
 }
 
 // LoggingConfig holds logging settings.
 type LoggingConfig struct {
-	AuditLog bool   `yaml:"audit_log"`
-	LogFile  string `yaml:"log_file"`
+	AuditLog       bool   `yaml:"audit_log"`
+	VerboseLogging bool   `yaml:"verbose_logging"` // when true, log one line per execute_sql: [debug] Execute Action: <type>, Connection: <name>
+	LogFile        string `yaml:"log_file"`
 }
 
 // DefaultConfig returns a configuration with sensible defaults.
@@ -54,11 +56,13 @@ func DefaultConfig() *Config {
 				"grant dba",
 				"delete",
 			},
+			DangerKeywordMatch:  "whole_text",
 			RequireConfirmForDDL: true,
 		},
 		Logging: LoggingConfig{
-			AuditLog: true,
-			LogFile:  "audit.log",
+			AuditLog:       true,
+			VerboseLogging: true,
+			LogFile:        "audit.log",
 		},
 	}
 }
@@ -94,13 +98,19 @@ func LoadFromFile(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %w", err)
-	}
-
 	// Normalize danger keywords to lowercase
 	for i, kw := range config.Security.DangerKeywords {
 		config.Security.DangerKeywords[i] = strings.ToLower(strings.TrimSpace(kw))
+	}
+	// Default danger keyword match mode (before Validate)
+	if config.Security.DangerKeywordMatch == "" {
+		config.Security.DangerKeywordMatch = "whole_text"
+	} else {
+		config.Security.DangerKeywordMatch = strings.ToLower(strings.TrimSpace(config.Security.DangerKeywordMatch))
+	}
+
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	return config, nil
@@ -110,6 +120,10 @@ func LoadFromFile(path string) (*Config, error) {
 func (c *Config) Validate() error {
 	if len(c.Oracle.Connections) == 0 {
 		return fmt.Errorf("oracle.connections is required and must have at least one entry")
+	}
+	mode := c.Security.DangerKeywordMatch
+	if mode != "whole_text" && mode != "tokens" {
+		return fmt.Errorf("security.danger_keyword_match must be \"whole_text\" or \"tokens\", got %q", mode)
 	}
 	return nil
 }

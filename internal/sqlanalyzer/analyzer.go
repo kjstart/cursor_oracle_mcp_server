@@ -34,14 +34,21 @@ type AnalysisResult struct {
 type Analyzer struct {
 	dangerKeywords []string
 	ddlKeywords    []string
+	matchMode      string // "whole_text" or "tokens"
 }
 
-// NewAnalyzer creates a new SQL analyzer with the given danger keywords.
-func NewAnalyzer(dangerKeywords []string) *Analyzer {
+// NewAnalyzer creates a new SQL analyzer with the given danger keywords and match mode.
+// matchMode: "whole_text" = case-insensitive substring match on full SQL (default, stricter);
+// "tokens" = match on tokens after removing comments/string literals (fewer false positives).
+func NewAnalyzer(dangerKeywords []string, matchMode string) *Analyzer {
 	// Normalize all keywords to lowercase
 	normalized := make([]string, len(dangerKeywords))
 	for i, kw := range dangerKeywords {
 		normalized[i] = strings.ToLower(strings.TrimSpace(kw))
+	}
+	mode := strings.ToLower(strings.TrimSpace(matchMode))
+	if mode != "whole_text" && mode != "tokens" {
+		mode = "whole_text"
 	}
 
 	return &Analyzer{
@@ -56,6 +63,7 @@ func NewAnalyzer(dangerKeywords []string) *Analyzer {
 			"grant",
 			"revoke",
 		},
+		matchMode: mode,
 	}
 }
 
@@ -86,8 +94,12 @@ func (a *Analyzer) Analyze(sql string) *AnalysisResult {
 	// Step 6: Check for DDL
 	result.IsDDL = a.isDDL(result.Tokens)
 
-	// Step 7: Match danger keywords
-	result.MatchedKeywords = a.matchKeywords(result.Tokens)
+	// Step 7: Match danger keywords (by full SQL or by tokens depending on mode)
+	if a.matchMode == "whole_text" {
+		result.MatchedKeywords = a.matchKeywordsWholeText(sql)
+	} else {
+		result.MatchedKeywords = a.matchKeywords(result.Tokens)
+	}
 	result.IsDangerous = len(result.MatchedKeywords) > 0
 
 	return result
@@ -268,6 +280,19 @@ func (a *Analyzer) isDDL(tokens []string) bool {
 	}
 
 	return false
+}
+
+// matchKeywordsWholeText finds all danger keywords as case-insensitive substrings in the full SQL.
+// Any occurrence (in string literals, comments, object names, etc.) triggers a match.
+func (a *Analyzer) matchKeywordsWholeText(sql string) []string {
+	lower := strings.ToLower(sql)
+	var matched []string
+	for _, kw := range a.dangerKeywords {
+		if strings.Contains(lower, kw) {
+			matched = append(matched, kw)
+		}
+	}
+	return matched
 }
 
 // matchKeywords finds all danger keywords in the tokens.

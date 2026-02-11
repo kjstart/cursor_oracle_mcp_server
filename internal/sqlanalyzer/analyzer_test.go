@@ -64,7 +64,8 @@ func TestRemoveStringLiterals(t *testing.T) {
 }
 
 func TestAnalyzer_Analyze(t *testing.T) {
-	analyzer := NewAnalyzer([]string{"truncate", "drop", "alter system"})
+	// Use "tokens" mode so string literals and comments are stripped before keyword match
+	analyzer := NewAnalyzer([]string{"truncate", "drop", "alter system"}, "tokens")
 
 	tests := []struct {
 		name             string
@@ -155,6 +156,42 @@ func TestAnalyzer_Analyze(t *testing.T) {
 				t.Errorf("ContainsPLSQL = %v, want %v", result.ContainsPLSQL, tt.wantPLSQL)
 			}
 
+			if tt.wantKeywords != nil {
+				if len(result.MatchedKeywords) != len(tt.wantKeywords) {
+					t.Errorf("MatchedKeywords = %v, want %v", result.MatchedKeywords, tt.wantKeywords)
+				} else {
+					for i, kw := range tt.wantKeywords {
+						if result.MatchedKeywords[i] != kw {
+							t.Errorf("MatchedKeywords[%d] = %v, want %v", i, result.MatchedKeywords[i], kw)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestAnalyzer_Analyze_WholeText(t *testing.T) {
+	analyzer := NewAnalyzer([]string{"truncate", "drop", "create"}, "whole_text")
+
+	tests := []struct {
+		name          string
+		sql           string
+		wantDangerous bool
+		wantKeywords  []string
+	}{
+		{"no keyword", "SELECT * FROM users", false, nil},
+		{"drop as token", "DROP TABLE t", true, []string{"drop"}},
+		{"drop in string literal", "SELECT 'drop table' FROM dual", true, []string{"drop"}},
+		{"create in object name", "SELECT * FROM user_source WHERE name = 'XX_CREATE_TABLE'", true, []string{"create"}},
+		{"truncate in comment", "SELECT 1 -- truncate later", true, []string{"truncate"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := analyzer.Analyze(tt.sql)
+			if result.IsDangerous != tt.wantDangerous {
+				t.Errorf("IsDangerous = %v, want %v", result.IsDangerous, tt.wantDangerous)
+			}
 			if tt.wantKeywords != nil {
 				if len(result.MatchedKeywords) != len(tt.wantKeywords) {
 					t.Errorf("MatchedKeywords = %v, want %v", result.MatchedKeywords, tt.wantKeywords)
