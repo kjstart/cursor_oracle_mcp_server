@@ -172,22 +172,35 @@ func IsPLSQLCreationStatement(sql string) bool {
 }
 
 // isPLSQLCreationDDL reports whether the SQL is a single CREATE PROCEDURE/FUNCTION/PACKAGE ... END; block.
+// Leading comments (-- or /* */) and blank lines are ignored so that files starting with comments are still detected.
 func isPLSQLCreationDDL(sql string) bool {
 	trimmed := strings.TrimSpace(sql)
 	if trimmed == "" {
 		return false
 	}
 	lower := strings.ToLower(trimmed)
-	hasCreate := strings.HasPrefix(lower, "create") || strings.HasPrefix(lower, "\ufeffcreate")
-	hasPlsql := strings.Contains(lower, "procedure") || strings.Contains(lower, " function ") || strings.Contains(lower, " package ")
-	// END may appear as " end ", " end;", " end name;", after newline "\nend ", or at end of string "end"/"end;"
-	hasEnd := strings.Contains(lower, " end ") ||
-		strings.Contains(lower, " end;") ||
-		strings.Contains(lower, "\nend ") ||
-		strings.Contains(lower, "\nend;") ||
-		strings.HasSuffix(lower, " end") ||
-		strings.HasSuffix(lower, " end;")
-	return hasCreate && hasPlsql && hasEnd
+	// Skip BOM
+	if strings.HasPrefix(lower, "\ufeff") {
+		lower = lower[1:]
+	}
+	// Find first "create" (start of statement after leading comments)
+	idx := strings.Index(lower, "create")
+	if idx == -1 {
+		return false
+	}
+	// From first "create" onward, must look like CREATE [OR REPLACE] PROCEDURE/FUNCTION/PACKAGE ... END
+	stmt := lower[idx:]
+	if !strings.HasPrefix(stmt, "create") {
+		return false
+	}
+	hasPlsql := strings.Contains(stmt, "procedure") || strings.Contains(stmt, " function ") || strings.Contains(stmt, " package ")
+	hasEnd := strings.Contains(stmt, " end ") ||
+		strings.Contains(stmt, " end;") ||
+		strings.Contains(stmt, "\nend ") ||
+		strings.Contains(stmt, "\nend;") ||
+		strings.HasSuffix(stmt, " end") ||
+		strings.HasSuffix(stmt, " end;")
+	return hasPlsql && hasEnd
 }
 
 // isMultiStatement checks if the SQL contains multiple statements.
