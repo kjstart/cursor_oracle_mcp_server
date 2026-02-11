@@ -271,7 +271,7 @@ func (s *Server) handleInitialize(req *jsonRPCRequest) {
 
 // handleToolsList returns the list of available tools.
 func (s *Server) handleToolsList(req *jsonRPCRequest) {
-	result := toolsListResult{
+		result := toolsListResult{
 		Tools: []tool{
 			{
 				Name:        "execute_sql",
@@ -289,6 +289,24 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 						},
 					},
 					Required: []string{"sql"},
+				},
+			},
+			{
+				Name:        "execute_sql_file",
+				Description: "Read SQL from a file, analyze it (same rules as execute_sql). If review is required (danger_keywords or DDL), a confirmation window shows the formatted full file content. On approve, execute the file contents. File path is resolved from server process working directory if relative.",
+				InputSchema: inputSchema{
+					Type: "object",
+					Properties: map[string]property{
+						"file_path": {
+							Type:        "string",
+							Description: "Path to the SQL file (absolute or relative to server working directory).",
+						},
+						"connection": {
+							Type:        "string",
+							Description: "Which configured database to use. Required when multiple connections are configured; omit when only one is configured.",
+						},
+					},
+					Required: []string{"file_path"},
 				},
 			},
 			{
@@ -317,6 +335,8 @@ func (s *Server) handleToolsCall(req *jsonRPCRequest) {
 	switch params.Name {
 	case "execute_sql":
 		s.handleExecuteSQL(req, params.Arguments)
+	case "execute_sql_file":
+		s.handleExecuteSQLFile(req, params.Arguments)
 	case "list_connections":
 		s.handleListConnections(req)
 	default:
@@ -416,6 +436,118 @@ func (s *Server) handleExecuteSQL(req *jsonRPCRequest, args map[string]interface
 	}
 
 	// Format and return result
+	resultJSON, _ := json.MarshalIndent(result, "", "  ")
+	s.sendToolResult(req.ID, string(resultJSON))
+}
+
+// handleExecuteSQLFile reads SQL from a file, analyzes it, shows review window with formatted content if needed, then executes on approve.
+func (s *Server) handleExecuteSQLFile(req *jsonRPCRequest, args map[string]interface{}) {
+	pathArg, ok := args["file_path"]
+	if !ok {
+		s.sendToolError(req.ID, "Missing required parameter: file_path")
+		return
+	}
+	filePath, ok := pathArg.(string)
+	if !ok {
+		s.sendToolError(req.ID, "Parameter 'file_path' must be a string")
+		return
+	}
+	filePath = strings.TrimSpace(filePath)
+	if filePath == "" {
+		s.sendToolError(req.ID, "file_path cannot be empty")
+		return
+	}
+	// Resolve path: if relative, it is relative to server process working directory
+	if !filepath.IsAbs(filePath) {
+		cwd, _ := os.Getwd()
+		filePath = filepath.Join(cwd, filePath)
+	}
+	filePath = filepath.Clean(filePath)
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		s.sendToolError(req.ID, fmt.Sprintf("Cannot read file: %v", err))
+		return
+	}
+	sql := string(data)
+	if sql == "" {
+		s.sendToolError(req.ID, "File is empty")
+		return
+	}
+	// 去掉末尾的 SQL*Plus 命令 "/"（单独一行），驱动执行时不需要，且可能报错
+	sql = stripTrailingSlashLine(sql)
+
+	connectionName := ""
+	if c, ok := args["connection"]; ok && c != nil {
+		if cs, ok := c.(string); ok {
+			connectionName = strings.TrimSpace(cs)
+		}
+	}
+	displayConnection := connectionName
+	if displayConnection == "" {
+		names := s.executorPool.Names()
+		if len(names) == 1 {
+			displayConnection = names[0]
+		}
+	}
+
+	analysis := s.analyzer.Analyze(sql)
+	stmtType := sqlanalyzer.GetStatementType(sql)
+
+	needsConfirmation := analysis.IsDangerous ||
+		(s.config.Security.RequireConfirmForDDL && analysis.IsDDL)
+
+	if needsConfirmation {
+		confirmReq := &confirm.ConfirmRequest{
+			SQL:             sql,
+			MatchedKeywords: analysis.MatchedKeywords,
+			StatementType:   stmtType,
+			IsDDL:           analysis.IsDDL,
+			Connection:      displayConnection,
+			SourceLabel:     "File: " + filePath,
+		}
+
+		approved, err := s.confirmer.Confirm(confirmReq)
+		if err != nil {
+			s.logAudit(sql, analysis.MatchedKeywords, false, "CONFIRM_ERROR: "+err.Error(), displayConnection)
+			s.sendToolError(req.ID, fmt.Sprintf("Confirmation dialog error: %v", err))
+			return
+		}
+
+		if !approved {
+			s.logAudit(sql, analysis.MatchedKeywords, false, "USER_REJECTED", displayConnection)
+			s.sendError(req.ID, ErrCodeUserRejected, "Execution cancelled by user", map[string]interface{}{
+				"code":             "USER_REJECTED",
+				"matched_keywords": analysis.MatchedKeywords,
+			})
+			return
+		}
+	}
+
+	ctx := context.Background()
+	result, err := s.executorPool.Execute(ctx, connectionName, sql, stmtType)
+	if err != nil {
+		s.logAudit(sql, analysis.MatchedKeywords, false, "EXECUTION_ERROR: "+err.Error(), displayConnection)
+		s.sendToolError(req.ID, fmt.Sprintf("SQL execution failed: %v", err))
+		return
+	}
+
+	s.logAudit(sql, analysis.MatchedKeywords, true, "SUCCESS", displayConnection)
+
+	if s.config.Logging.VerboseLogging {
+		msg := fmt.Sprintf("[debug] Execute File Action: %s, Connection: %s, File: %s\n", stmtType, displayConnection, filePath)
+		s.lastVerboseLog.mu.Lock()
+		dup := s.lastVerboseLog.msg == msg && time.Since(s.lastVerboseLog.at) < 2*time.Second
+		if !dup {
+			s.lastVerboseLog.msg = msg
+			s.lastVerboseLog.at = time.Now()
+		}
+		s.lastVerboseLog.mu.Unlock()
+		if !dup {
+			fmt.Fprint(os.Stderr, msg)
+		}
+	}
+
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
 	s.sendToolResult(req.ID, string(resultJSON))
 }
@@ -536,5 +668,28 @@ func (s *Server) sendLogNotification(level, message string) {
 func (s *Server) logAudit(sql string, keywords []string, approved bool, action string, connection string) {
 	if s.auditor != nil {
 		s.auditor.Log(sql, keywords, approved, action, connection)
+	}
+}
+
+// stripTrailingSlashLine removes trailing lines that are only "/" (SQL*Plus execute buffer command).
+// The Oracle driver does not understand "/"; leaving it can cause errors when executing file content.
+func stripTrailingSlashLine(s string) string {
+	for {
+		s = strings.TrimSuffix(s, "\r\n")
+		s = strings.TrimSuffix(s, "\n")
+		s = strings.TrimSuffix(s, "\r")
+		last := strings.LastIndex(s, "\n")
+		if last == -1 {
+			if strings.TrimSpace(s) == "/" {
+				return ""
+			}
+			return s
+		}
+		line := s[last+1:]
+		if strings.TrimSpace(line) == "/" {
+			s = s[:last]
+			continue
+		}
+		return s
 	}
 }

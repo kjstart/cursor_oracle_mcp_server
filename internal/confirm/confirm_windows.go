@@ -46,6 +46,7 @@ type ConfirmRequest struct {
 	StatementType   string
 	IsDDL           bool
 	Connection      string // Database alias from config (e.g. "database1", "database2") for title/display
+	SourceLabel     string // Optional, e.g. "File: path/to/file.sql" for execute_sql_file
 }
 
 // Confirmer handles user confirmation dialogs.
@@ -122,24 +123,30 @@ func (c *Confirmer) Confirm(req *ConfirmRequest) (bool, error) {
 }
 
 func buildConfirmHeader(req *ConfirmRequest) string {
-	var parts []string
+	var line1 []string
 	if req.Connection != "" {
-		parts = append(parts, "Database: "+req.Connection)
+		line1 = append(line1, "Database: "+req.Connection)
 	}
 	if req.StatementType != "" {
-		parts = append(parts, "Type: "+req.StatementType)
-	}
-	if len(req.MatchedKeywords) > 0 {
-		parts = append(parts, "Keywords: "+strings.Join(req.MatchedKeywords, ", "))
+		line1 = append(line1, "Action: "+req.StatementType)
 	}
 	if req.IsDDL {
-		parts = append(parts, "DDL (auto-committed)")
+		line1 = append(line1, "DDL (auto-committed)")
 	}
-	if len(parts) == 0 {
+	var out string
+	if len(line1) > 0 {
+		out = strings.Join(line1, "    |    ")
+	}
+	if req.SourceLabel != "" {
+		if out != "" {
+			out += "\n"
+		}
+		out += req.SourceLabel // "File: path" 单独第二行
+	}
+	if out == "" {
 		return "Confirm SQL execution"
 	}
-	// Use wider separator so "Database" and "Type" (etc.) are clearly separated
-	return strings.Join(parts, "    |    ")
+	return out
 }
 
 // sqlKeywords for Oracle/PL-SQL syntax highlighting (lowercase for matching).
@@ -369,7 +376,7 @@ $btnExecute.Location = New-Object System.Drawing.Point(700, 670)
 $btnExecute.Size = New-Object System.Drawing.Size(90, 28)
 $btnExecute.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right
 $btnExecute.DialogResult = [System.Windows.Forms.DialogResult]::OK
-$form.AcceptButton = $btnExecute
+# Do not set AcceptButton/CancelButton so keyboard focus is not on any button (avoids accidental approve while typing)
 $form.Controls.Add($btnExecute)
 
 $btnCancel = New-Object System.Windows.Forms.Button
@@ -378,11 +385,12 @@ $btnCancel.Location = New-Object System.Drawing.Point(800, 670)
 $btnCancel.Size = New-Object System.Drawing.Size(90, 28)
 $btnCancel.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right
 $btnCancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
-$form.CancelButton = $btnCancel
 $form.Controls.Add($btnCancel)
 
 $form.Controls.Add($browser)
 $form.Controls.SetChildIndex($browser, 1)
+# Put focus on the SQL content (browser), not on Execute/Cancel, so user typing does not trigger a button
+$form.Add_Shown({ $form.ActiveControl = $browser })
 $result = $form.ShowDialog()
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 if ($result -eq [System.Windows.Forms.DialogResult]::OK) { [IO.File]::WriteAllText($ResultPath, "1", $utf8NoBom) }

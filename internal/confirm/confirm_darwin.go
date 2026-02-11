@@ -16,6 +16,7 @@ type ConfirmRequest struct {
 	StatementType   string
 	IsDDL           bool
 	Connection      string // Database alias from config (e.g. "database1", "database2") for title/display
+	SourceLabel     string // Optional, e.g. "File: path/to/file.sql" for execute_sql_file
 }
 
 // Confirmer handles user confirmation dialogs on macOS.
@@ -86,6 +87,11 @@ func buildConfirmMessage(req *ConfirmRequest) string {
 	// Warning for DDL
 	if req.IsDDL {
 		sb.WriteString("WARNING: Oracle DDL is auto-committed and cannot be rolled back!\n\n")
+	}
+
+	if req.SourceLabel != "" {
+		sb.WriteString(req.SourceLabel)
+		sb.WriteString("\n\n")
 	}
 
 	sb.WriteString("Do you want to continue?")
