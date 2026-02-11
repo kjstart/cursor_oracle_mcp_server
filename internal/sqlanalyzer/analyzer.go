@@ -168,7 +168,13 @@ func isPLSQLCreationDDL(sql string) bool {
 	lower := strings.ToLower(trimmed)
 	hasCreate := strings.HasPrefix(lower, "create") || strings.HasPrefix(lower, "\ufeffcreate")
 	hasPlsql := strings.Contains(lower, "procedure") || strings.Contains(lower, " function ") || strings.Contains(lower, " package ")
-	hasEnd := strings.Contains(lower, " end ")
+	// END may appear as " end ", " end;", " end name;", after newline "\nend ", or at end of string "end"/"end;"
+	hasEnd := strings.Contains(lower, " end ") ||
+		strings.Contains(lower, " end;") ||
+		strings.Contains(lower, "\nend ") ||
+		strings.Contains(lower, "\nend;") ||
+		strings.HasSuffix(lower, " end") ||
+		strings.HasSuffix(lower, " end;")
 	return hasCreate && hasPlsql && hasEnd
 }
 

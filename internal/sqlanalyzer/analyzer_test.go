@@ -170,6 +170,28 @@ func TestAnalyzer_Analyze(t *testing.T) {
 	}
 }
 
+func TestIsPLSQLCreationDDL_EndVariants(t *testing.T) {
+	// CREATE FUNCTION/PROCEDURE must be recognized as single block whether END has optional name or not.
+	tests := []struct {
+		name string
+		sql  string
+		want bool
+	}{
+		{"END with name", "CREATE OR REPLACE FUNCTION f(x DATE) RETURN DATE AS BEGIN RETURN x; END f;", true},
+		{"END with semicolon only", "CREATE OR REPLACE FUNCTION f(x DATE) RETURN DATE AS BEGIN RETURN x; END;", true},
+		{"END with name and newline", "CREATE OR REPLACE FUNCTION f(x DATE) RETURN DATE AS BEGIN RETURN x;\nEND f;", true},
+		{"not create", "BEGIN NULL; END;", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsPLSQLCreationStatement(tt.sql)
+			if got != tt.want {
+				t.Errorf("IsPLSQLCreationStatement(%q) = %v, want %v", tt.sql, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetStatementType(t *testing.T) {
 	tests := []struct {
 		sql      string
