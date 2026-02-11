@@ -1,0 +1,38 @@
+# Oracle MCP Server Configuration
+# Copy this file to config.yaml and modify as needed
+
+# Oracle Database Connection (required). Name -> DSN. With one entry, all SQL uses that DB.
+# With multiple entries, pass "connection" in execute_sql (see list_connections).
+oracle:
+  connections:
+    database1: "user/pass@//host:1521/ORCL"
+#    database2: "user/pass@//host2:1521/ORCL"
+# Connection string format: user/password@//host:port/service_name
+
+# Security Settings
+security:
+  # List of keywords that trigger user confirmation
+  # Case-insensitive, supports multi-word keywords (e.g., "alter system")
+  # Matching is done on SQL tokens, not substrings
+  danger_keywords:
+    - truncate
+    - drop
+    - alter
+    - shutdown
+    - grant
+    - delete
+    - revoke
+    - create
+    - update
+
+  # If true, all DDL statements (CREATE, DROP, ALTER, etc.) require confirmation
+  # even if they don't match danger_keywords
+  require_confirm_for_ddl: true
+
+# Logging Settings
+logging:
+  # Enable audit logging
+  audit_log: true
+  
+  # Path to audit log file (relative to executable or absolute path)
+  log_file: "audit.log"
