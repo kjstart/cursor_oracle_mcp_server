@@ -1,3 +1,5 @@
+![Logo](https://www.alvinliu.com/wp-content/uploads/2026/02/a3f08b34-d774-48ce-453b-67e6d5cdb981.png)
+
 # Oracle MCP Server
 
 A Model Context Protocol (MCP) server for Oracle Database, enabling AI assistants like Cursor to execute SQL statements directly against Oracle databases.
