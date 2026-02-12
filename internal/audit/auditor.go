@@ -55,7 +55,7 @@ func (a *Auditor) openOrCreate() error {
 	if err != nil {
 		return a.rotateOpen()
 	}
-	// 文件名 base_2006-01-02_150405.log 按名字降序 = 时间从新到旧
+	// Filename base_2006-01-02_150405.log; sort descending = newest first
 	sort.Sort(sort.Reverse(sort.StringSlice(matches)))
 	for _, path := range matches {
 		info, err := os.Stat(path)
@@ -122,7 +122,7 @@ func (a *Auditor) Log(sql string, matchedKeywords []string, approved bool, actio
 
 	if a.currentSize+size >= a.maxSize && a.currentSize > 0 {
 		if err := a.rotateOpen(); err != nil {
-			// 无法轮转时仍写入当前文件，避免丢日志
+			// On rotate failure still write to current file to avoid losing the log entry
 			_, _ = a.file.WriteString(entry)
 			a.currentSize += size
 			a.file.Sync()

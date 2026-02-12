@@ -4,13 +4,19 @@
 
 A Model Context Protocol (MCP) server for Oracle Database, enabling AI assistants like Cursor to execute SQL statements directly against Oracle databases.
 
+**Alvin Liu** — [https://alvinliu.com](https://alvinliu.com)
+
 ## Features
 
-- **Full SQL Support**: Execute SELECT, INSERT, UPDATE, DELETE, and DDL statements
-- **Human-in-the-Loop**: Configurable safety confirmations for dangerous operations
-- **Cross-Platform**: Supports Windows and macOS
-- **Single Executable**: Standalone binary (requires Oracle Instant Client)
-- **Audit Logging**: Complete audit trail of all SQL executions
+- **Full SQL support**: SELECT, INSERT, UPDATE, DELETE, DDL (CREATE, DROP, ALTER, etc.), and multiple statements per request
+- **Execute from file**: Run a full SQL file via `execute_sql_file`; trailing SQL*Plus `/` is stripped automatically
+- **PL/SQL blocks**: CREATE PROCEDURE/FUNCTION/PACKAGE (including files with leading comments) and anonymous blocks are executed as one unit
+- **Human-in-the-loop**: Configurable danger keywords trigger a review window with full SQL (syntax-highlighted on Windows); Database | Action | Keywords | DDL on the first line, File on the second; focus stays on content, not buttons
+- **Danger keyword matching**: `whole_text` (substring in full SQL) or `tokens` (exact token match; e.g. `created_at` does not match `create`)
+- **Multi-database**: Configure multiple connections; use `list_connections` to see names and status (failed connections are retried on each list)
+- **Audit logging**: Keyed fields (`AUDIT_TIME`, `AUDIT_CONNECTION`, `AUDIT_KEYWORDS`, `AUDIT_APPROVED`, `AUDIT_ACTION`, `AUDIT_SQL`), full SQL, record separator `######AUDIT_END######`; 10MB rotation, reuse last non-full file on startup, filenames include creation date (e.g. `audit_2006-01-02_150405.log`)
+- **Cross-platform**: Windows (WinForms + WebBrowser for review), macOS (osascript dialog)
+- **Single executable**: Standalone binary (requires Oracle Instant Client)
 
 ## Requirements
 
@@ -49,7 +55,7 @@ A Model Context Protocol (MCP) server for Oracle Database, enabling AI assistant
 ```bash
 # Clone the repository
 git clone https://github.com/kjstart/cursor_oracle_mcp_server
-cd oracle-mcp-server
+cd cursor_oracle_mcp_server
 
 # Download dependencies
 go mod tidy
@@ -58,7 +64,7 @@ go mod tidy
 $env:CGO_ENABLED="1"
 go build -o oracle-mcp.exe .
 
-# Windows（CMD）
+# Windows (CMD)
 set CGO_ENABLED=1
 go build -o oracle-mcp.exe .
 
@@ -71,7 +77,7 @@ export PATH=$GOROOT/bin:$PATH
 export CGO_ENABLED=1
 export CC=x86_64-w64-mingw32-gcc
 go install github.com/godror/godror@latest
-CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o oracle-mcp.exe
+CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o oracle-mcp.exe .
 
 # macOS (Intel): native build only
 CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o oracle-mcp .
@@ -85,11 +91,11 @@ CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o oracle-mcp .
 ```
 oracle-mcp/
 ├── oracle-mcp.exe          # Main executable
-├── config.yaml             # Configuration file
+├── config.yaml             # Configuration file (copy from config.yaml.example)
 ├── instantclient/          # Oracle Instant Client files
 │   ├── oci.dll
 │   └── oraociei19.dll
-└── audit.log               # Audit log (created on first run)
+└── audit_*.log             # Audit logs (10MB rotation, creation date in filename)
 ```
 
 ### Build troubleshooting
@@ -109,32 +115,36 @@ go build -o oracle-mcp.exe .
 
 ## Configuration
 
-Copy `config.yaml.example` to `config.yaml` and configure `oracle.connections` (at least one entry):
+Copy `config.yaml.example` to `config.yaml` and configure at least one connection under `oracle.connections`:
 
 ```yaml
 oracle:
   connections:
-    database1: "user/pass@//localhost:1521/ORCL"
-    # Add more for multi-DB (e.g. copy between servers). Use list_connections / execute_sql(connection: "name").
+    database1: "user/pass@//host:1521/ORCL"
+    # database2: "user/pass@//host2:1521/ORCL"
 
-# Security Settings
 security:
+  # "whole_text" = substring in full SQL; "tokens" = exact token match (e.g. created_at ≠ create)
+  danger_keyword_match: "whole_text"
+
   danger_keywords:
     - truncate
     - drop
-    - alter system
-    - shutdown
-    - grant dba
     - delete
-  require_confirm_for_ddl: true
+    - create
+    - update
+    - execute immediate
+    # ... (see config.yaml.example)
 
-# Logging Settings
+  require_confirm_for_ddl: true   # DDL always requires confirmation
+
 logging:
   audit_log: true
-  log_file: "audit.log"
+  verbose_logging: true   # One short stderr line per execute_sql / execute_sql_file
+  log_file: "audit.log"  # Base name; actual files: audit_YYYY-MM-DD_HHMMSS.log, 10MB rotation
 ```
 
-With **one** connection, all SQL runs against that database (no need to pass `connection`). With **multiple** connections, use the `connection` argument in `execute_sql` and `list_connections` to see names.
+With **one** connection, all SQL runs against that database (no need to pass `connection`). With **multiple** connections, use the `connection` argument in `execute_sql` / `execute_sql_file` and `list_connections` to see names and availability.
 
 ### Environment Variables
 
@@ -161,125 +171,71 @@ Add to your Cursor MCP settings (`~/.cursor/mcp.json` or workspace settings):
 }
 ```
 
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| **execute_sql** | Run SQL (one or multiple statements). Params: `sql`, optional `connection`. |
+| **execute_sql_file** | Read SQL from a file, analyze, show review if needed, then execute. Trailing `/` is stripped. Params: `file_path`, optional `connection`. |
+| **list_connections** | List configured connection names and availability; retries previously failed connections. |
+
 ### Example Interactions
 
-Tools: **execute_sql**, **list_connections**.
-
 ```
-// One connection configured: no need to pass connection
+// One connection: no need to pass connection
 execute_sql({ "sql": "SELECT table_name FROM user_tables" })
 
-// Multiple connections: specify which DB
+// Multiple connections
 execute_sql({ "sql": "SELECT * FROM my_table", "connection": "database1" })
-execute_sql({ "sql": "CREATE TABLE ...", "connection": "database2" })
+execute_sql({ "sql": "CREATE TABLE test (id NUMBER)", "connection": "database2" })
 
-// See configured connection names
+// Run a SQL file (e.g. procedure script; trailing / stripped)
+execute_sql_file({ "file_path": "d:\\scripts\\myscript.sql", "connection": "ps" })
+
+// See connection names and status
 list_connections()
-
-// DML / DDL (will prompt for confirmation when dangerous)
-execute_sql({ "sql": "CREATE TABLE test (id NUMBER PRIMARY KEY)" })
 ```
 
-## Safety Features
+## Safety and Review Window
 
-### Human-in-the-Loop
+When SQL matches `danger_keywords` or is DDL (if `require_confirm_for_ddl` is true), a confirmation window appears:
 
-When SQL contains dangerous keywords or is a DDL statement, a native dialog appears:
+- **Windows**: WinForms window with syntax-highlighted SQL (WebBrowser). First line: Database | Action | Keywords | DDL; second line: File (when from `execute_sql_file`). Focus is on the SQL content, not the Execute/Cancel buttons.
+- **macOS**: osascript dialog with full SQL.
 
-**Windows**: Win32 MessageBox  
-**macOS**: osascript dialog
+Execution proceeds only after the user confirms. Rejection is logged and returned as `USER_REJECTED`.
 
-The dialog shows:
-- Matched keywords
-- Statement type
-- Full SQL (truncated if long)
-- DDL auto-commit warning
+## SQL Execution
 
-User must click "Yes" to proceed or "No" to cancel.
+- **Single statement**: One SQL statement, with or without trailing semicolon.
+- **Multiple statements**: One per line, **each line ending with a semicolon**. Executed in order.
+- **PL/SQL**: CREATE PROCEDURE/FUNCTION/PACKAGE (including files with leading `--` or `/* */`) and anonymous blocks (BEGIN...END; / DECLARE...END;) are treated as one block and not split.
+- **From file**: Trailing SQL*Plus `/` (on its own line) is removed before execution.
 
-### SQL execution
+## Audit Log
 
-- **Single statement**: Pass one SQL statement (with or without a trailing semicolon).
-- **Multiple statements**: One statement per line, **each line ending with a semicolon**, e.g.:
-  ```sql
-  ALTER TABLE t ADD col1 NUMBER;
-  INSERT INTO t VALUES (1);
-  COMMIT;
-  ```
-  Statements are executed in order. Procedures and anonymous blocks (`BEGIN...END;`) are treated as one unit and are not split.
-
-### Security
-
-- **Danger keywords**: When SQL matches `danger_keywords` in config (or is DDL / contains `create`), a confirmation window shows the full SQL; execution proceeds only after the user confirms.
-- **Token matching**: Only real keywords are matched; text inside string literals is ignored (e.g. `SELECT 'drop table' FROM dual` is not treated as dangerous).
+- **Keyed format**: `AUDIT_TIME=...`, `AUDIT_CONNECTION=...`, `AUDIT_KEYWORDS=...`, `AUDIT_APPROVED=...`, `AUDIT_ACTION=...`, `AUDIT_SQL=` followed by the full SQL, then a line `######AUDIT_END######` as record separator.
+- **Rotation**: 10MB per file. On startup, the most recent existing log file under 10MB is reused; when full, a new file is created with creation date in the name: `audit_2006-01-02_150405.log`.
 
 ## MCP Protocol
 
 ### Tool: `execute_sql`
 
-**Input Schema**:
-```json
-{
-  "type": "object",
-  "properties": {
-    "sql": {
-      "type": "string",
-      "description": "SQL to run: one statement, or multiple statements (one per line, each line ending with semicolon)"
-    }
-  },
-  "required": ["sql"]
-}
-```
+**Input**: `sql` (required), `connection` (optional).
 
-**Output (Query)**:
-```json
-{
-  "columns": ["TABLE_NAME", "NUM_ROWS"],
-  "rows": [
-    ["EMPLOYEES", 107],
-    ["DEPARTMENTS", 27]
-  ],
-  "statement_type": "SELECT",
-  "execution_time_ms": 45,
-  "success": true
-}
-```
+**Output (query)**: `columns`, `rows`, `statement_type`, `execution_time_ms`, `success`.
 
-**Output (DML/DDL)**:
-```json
-{
-  "rows_affected": 1,
-  "statement_type": "INSERT",
-  "execution_time_ms": 12,
-  "success": true,
-  "warning": "DDL statements are auto-committed in Oracle"
-}
-```
+**Output (DML/DDL)**: `rows_affected`, `statement_type`, `execution_time_ms`, `success`, optional `warning`.
 
-**Error (User Rejected)**:
-```json
-{
-  "error": {
-    "code": -32000,
-    "message": "Execution cancelled by user",
-    "data": {
-      "code": "USER_REJECTED",
-      "matched_keywords": ["truncate"]
-    }
-  }
-}
-```
+**Error (user rejected)**: `code` -32000, `message` "Execution cancelled by user", `data.code` "USER_REJECTED", `data.matched_keywords`.
 
-## Audit Log Format
+### Tool: `execute_sql_file`
 
-```
-2026-02-10T15:41:12+08:00
-SQL=TRUNCATE TABLE user_log
-KEYWORDS=truncate
-APPROVED=true
-ACTION=SUCCESS
----
-```
+**Input**: `file_path` (required), `connection` (optional). Same analysis and review rules as `execute_sql`; executes the file contents (trailing `/` stripped).
+
+### Tool: `list_connections`
+
+**Input**: none. **Output**: `connections` (name + availability), `message`.
 
 ## Troubleshooting
 

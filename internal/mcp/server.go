@@ -474,7 +474,7 @@ func (s *Server) handleExecuteSQLFile(req *jsonRPCRequest, args map[string]inter
 		s.sendToolError(req.ID, "File is empty")
 		return
 	}
-	// 去掉末尾的 SQL*Plus 命令 "/"（单独一行），驱动执行时不需要，且可能报错
+	// Strip trailing SQL*Plus "/" (on its own line); driver does not need it and may error
 	sql = stripTrailingSlashLine(sql)
 
 	connectionName := ""

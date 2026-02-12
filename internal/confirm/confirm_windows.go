@@ -144,7 +144,7 @@ func buildConfirmHeader(req *ConfirmRequest) string {
 		if out != "" {
 			out += "\n"
 		}
-		out += req.SourceLabel // "File: path" 单独第二行
+		out += req.SourceLabel // "File: path" on its own second line
 	}
 	if out == "" {
 		return "Confirm SQL execution"
