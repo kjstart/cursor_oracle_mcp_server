@@ -160,12 +160,29 @@ With **one** connection, all SQL runs against that database (no need to pass `co
 
 Add to your Cursor MCP settings (`~/.cursor/mcp.json` or workspace settings):
 
+#### Windows, add Oracle client to PATH
 ```json
 {
   "mcpServers": {
     "oracle": {
       "command": "C:\\path\\to\\oracle-mcp.exe",
       "args": []
+    }
+  }
+}
+```
+
+#### Mac
+```json
+{
+  "mcpServers": {
+    "oracle": {
+      "command": "/path_to/oracle-mcp.exe",
+      "args": [],
+      "env": {
+        "ORACLE_HOME": "/path_to/instantclient_19_8",
+        "DYLD_LIBRARY_PATH": "/path_to/instantclient_19_8"
+      }
     }
   }
 }
