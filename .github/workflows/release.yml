@@ -15,15 +15,15 @@ jobs:
       contents: write
     
     strategy:
-      fail-fast: false # Prevent one OS failure from cancelling other matrix jobs
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
             asset_name: oracle-mcp-server-windows-amd64.exe
-            archive_name: oracle-mcp-server-windows-amd64.zip
+            archive_base: oracle-mcp-server-windows-amd64 # No extension; version will be appended to archive name
           - os: macos-latest
             asset_name: oracle-mcp-server-darwin-arm64
-            archive_name: oracle-mcp-server-darwin-arm64.tar.gz
+            archive_base: oracle-mcp-server-darwin-arm64
 
     steps:
       - name: Checkout Code
@@ -45,8 +45,10 @@ jobs:
         run: |
           $env:CGO_ENABLED="1"
           go build -ldflags="-s -w" -o ${{ matrix.asset_name }} .
-          # Package files into zip using PowerShell
-          Compress-Archive -Path ${{ matrix.asset_name }}, user_guide.md, config.yaml.example -DestinationPath ${{ matrix.archive_name }}
+          
+          # Append version to zip filename
+          $ArchiveName = "${{ matrix.archive_base }}-${{ github.ref_name }}.zip"
+          Compress-Archive -Path ${{ matrix.asset_name }}, user_guide.md, config.yaml.example -DestinationPath $ArchiveName
 
       # 2. Build and Package on macOS (Apple Silicon M1/M2/M3) natively
       - name: Build and Package (macOS ARM64)
@@ -56,8 +58,9 @@ jobs:
           export GOOS=darwin
           export GOARCH=arm64
           go build -ldflags="-s -w" -o ${{ matrix.asset_name }} .
-          # Package files into tar.gz
-          tar -czvf ${{ matrix.archive_name }} ${{ matrix.asset_name }} user_guide.md config.yaml.example
+          
+          # Append version to tar.gz filename
+          tar -czvf ${{ matrix.archive_base }}-${{ github.ref_name }}.tar.gz ${{ matrix.asset_name }} user_guide.md config.yaml.example
 
       # 3. Cross-compile and Package Intel (amd64) on macOS using built-in clang
       - name: Build and Package (macOS Intel)
@@ -67,8 +70,9 @@ jobs:
           export GOOS=darwin
           export GOARCH=amd64
           go build -ldflags="-s -w" -o oracle-mcp-server-darwin-amd64 .
-          # Package files into tar.gz
-          tar -czvf oracle-mcp-server-darwin-amd64.tar.gz oracle-mcp-server-darwin-amd64 user_guide.md config.yaml.example
+          
+          # Append version to archive filename
+          tar -czvf oracle-mcp-server-darwin-amd64-${{ github.ref_name }}.tar.gz oracle-mcp-server-darwin-amd64 user_guide.md config.yaml.example
 
       # 4. Upload all built archives using glob patterns
       - name: Upload Release Asset
