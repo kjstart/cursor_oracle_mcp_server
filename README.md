@@ -191,6 +191,7 @@ Add to your Cursor MCP settings (`~/.cursor/mcp.json` or workspace `.cursor/mcp.
 
 **Windows:**
 
+#### Windows, add Oracle client to PATH
 ```json
 {
   "mcpServers": {
@@ -202,7 +203,8 @@ Add to your Cursor MCP settings (`~/.cursor/mcp.json` or workspace `.cursor/mcp.
 }
 ```
 
-**macOS (with Oracle Instant Client path):**  
+#### Mac
+
 Use the `env` block so the MCP process sees `ORACLE_HOME` and `DYLD_LIBRARY_PATH`:
 
 ```json
@@ -220,7 +222,7 @@ Use the `env` block so the MCP process sees `ORACLE_HOME` and `DYLD_LIBRARY_PATH
 }
 ```
 
-Replace `/opt/oracle/instantclient_19_20` with your actual Instant Client directory. You can also reference existing shell env with `"ORACLE_HOME": "${env:ORACLE_HOME}"` if Cursor was started from a terminal that already has it set.
+Replace `/path/to/oracle-mcp` and `/opt/oracle/instantclient_19_20` with your actual paths. You can also reference existing shell env with `"ORACLE_HOME": "${env:ORACLE_HOME}"` if Cursor was started from a terminal that already has it set.
 
 ### Tools
 
