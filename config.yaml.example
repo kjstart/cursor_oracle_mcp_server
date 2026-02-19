@@ -31,6 +31,8 @@ security:
     - create
     - update
     - execute immediate
+    - replace
+    - call
 
   # If true, all DDL statements (CREATE, DROP, ALTER, etc.) require confirmation
   # even if they don't match danger_keywords
