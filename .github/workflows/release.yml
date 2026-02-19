@@ -10,6 +10,9 @@ jobs:
   build-and-release:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+
+    permissions:
+      contents: write
     
     strategy:
       fail-fast: false # Prevent one OS failure from cancelling other matrix jobs
