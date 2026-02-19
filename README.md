@@ -1,5 +1,7 @@
 ![Logo](https://www.alvinliu.com/wp-content/uploads/2026/02/a3f08b34-d774-48ce-453b-67e6d5cdb981.png)
 
+[English](README.md) | [中文](README.zh-CN.md)
+
 # Oracle MCP Server
 
 A Model Context Protocol (MCP) server for Oracle Database, enabling AI assistants like Cursor to execute SQL statements directly against Oracle databases.
@@ -36,82 +38,27 @@ A Model Context Protocol (MCP) server for Oracle Database, enabling AI assistant
    export DYLD_LIBRARY_PATH=/path/to/instantclient:$DYLD_LIBRARY_PATH
    ```
 
-### Build Dependencies
-
-- Go 1.22+
-- **CGO must be enabled**: godror requires CGO and a C compiler.
-- **Windows**: Use **MinGW-w64** (GCC 7.2+) and add its `bin` to PATH.
-  - **Do not use Cygwin's gcc.** If both are installed, ensure MinGW's `bin` comes before Cygwin in PATH, or you may see `cannot parse gcc output ... as ELF, Mach-O, PE, XCOFF`.
-  - Install via Chocolatey: `choco install mingw`, or [MSYS2](https://www.msys2.org/) then `pacman -S mingw-w64-ucrt-x86_64-gcc` and use `mingw64\bin`.
-  - Verify with `where gcc` and `gcc -v`; you should see "mingw" or "MinGW" and 64-bit (x86_64).
-- **macOS**: Run `xcode-select --install` for command line tools.
-
 ## Installation
 
-### Building from Source
+### Download pre-built binary (recommended)
 
-**Important**: Build with CGO enabled and GCC available, or you will see errors like `undefined: VersionInfo`.
+Pre-built binaries are published on [GitHub Releases](https://github.com/kjstart/cursor_oracle_mcp_server/releases). No build required.
 
-```bash
-# Clone the repository
-git clone https://github.com/kjstart/cursor_oracle_mcp_server
-cd cursor_oracle_mcp_server
+1. **Download** the archive for your platform:
+   - **Windows**: `oracle-mcp-server-windows-amd64-<version>.zip`
+   - **macOS Apple Silicon (M1/M2/M3)**: `oracle-mcp-server-darwin-arm64-<version>.tar.gz`
+   - **macOS Intel**: `oracle-mcp-server-darwin-amd64-<version>.tar.gz`
 
-# Download dependencies
-go mod tidy
+2. **Extract** the archive. You will get:
+   - The executable (e.g. `oracle-mcp-server-windows-amd64.exe` or `oracle-mcp-server-darwin-arm64`)
+   - `user_guide.md` — step-by-step setup
+   - `config.yaml.example` — copy to `config.yaml` and edit
 
-# Windows (PowerShell): enable CGO and ensure gcc is in PATH
-$env:CGO_ENABLED="1"
-go build -o oracle-mcp.exe .
+3. **Install Oracle Instant Client** (see [Requirements](#requirements) above) and add it to `PATH` (Windows) or set `ORACLE_HOME` and `DYLD_LIBRARY_PATH` (macOS).
 
-# Windows (CMD)
-set CGO_ENABLED=1
-go build -o oracle-mcp.exe .
+4. **Configure** `config.yaml` with your database connection(s), then add the server to Cursor MCP (see [Configuration](#configuration) and [Usage with Cursor](#usage-with-cursor) below).
 
-# Windows (MSYS UCRT64)
-export PATH=/c/oracle/instantclient_21_12:$PATH
-export ORACLE_HOME=/c/oracle/instantclient_21_12
-pacman -S mingw-w64-ucrt-x86_64-go
-export GOROOT=/ucrt64/lib/go
-export PATH=$GOROOT/bin:$PATH
-export CGO_ENABLED=1
-export CC=x86_64-w64-mingw32-gcc
-go install github.com/godror/godror@latest
-CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o oracle-mcp.exe .
-
-# macOS (Intel): native build only
-CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o oracle-mcp .
-
-# macOS (Apple Silicon)
-CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o oracle-mcp .
-```
-
-### Binary Distribution
-
-```
-oracle-mcp/
-├── oracle-mcp.exe          # Main executable
-├── config.yaml             # Configuration file (copy from config.yaml.example)
-├── instantclient/          # Oracle Instant Client files
-│   ├── oci.dll
-│   └── oraociei19.dll
-└── audit_*.log             # Audit logs (10MB rotation, creation date in filename)
-```
-
-### Build troubleshooting
-
-| Error | Cause | Fix |
-|-------|------|-----|
-| `undefined: VersionInfo` | CGO disabled | Set `CGO_ENABLED=1` and install gcc |
-| `gcc not found` | gcc not installed or not in PATH | Install MinGW-w64 and add its `bin` to PATH |
-| `cannot parse gcc output ... as ELF, Mach-O, PE, XCOFF` | Wrong gcc (e.g. **Cygwin gcc**) | Use **MinGW-w64** gcc and put it before Cygwin in PATH; verify with `where gcc` and `gcc -v` |
-
-After changing gcc or PATH, clear the build cache and rebuild:
-
-```bash
-go clean -cache
-go build -o oracle-mcp.exe .
-```
+For a full walkthrough, see [user_guide.md](user_guide.md).
 
 ## Configuration
 
@@ -310,6 +257,73 @@ Error: DPI-1047: Cannot locate a 64-bit Oracle Client library
 Error: ORA-01031: insufficient privileges
 ```
 → The configured database user lacks required permissions
+
+## Building from Source (optional)
+
+If you prefer to build the binary yourself (e.g. for a different Go version or platform):
+
+### Build dependencies
+
+- Go 1.22+
+- **CGO must be enabled**: godror requires CGO and a C compiler.
+- **Windows**: Use **MinGW-w64** (GCC 7.2+) and add its `bin` to PATH.
+  - **Do not use Cygwin's gcc.** If both are installed, ensure MinGW's `bin` comes before Cygwin in PATH, or you may see `cannot parse gcc output ... as ELF, Mach-O, PE, XCOFF`.
+  - Install via Chocolatey: `choco install mingw`, or [MSYS2](https://www.msys2.org/) then `pacman -S mingw-w64-ucrt-x86_64-gcc` and use `mingw64\bin`.
+  - Verify with `where gcc` and `gcc -v`; you should see "mingw" or "MinGW" and 64-bit (x86_64).
+- **macOS**: Run `xcode-select --install` for command line tools.
+
+### Build commands
+
+**Important**: Build with CGO enabled and GCC available, or you will see errors like `undefined: VersionInfo`.
+
+```bash
+# Clone the repository
+git clone https://github.com/kjstart/cursor_oracle_mcp_server
+cd cursor_oracle_mcp_server
+
+# Download dependencies
+go mod tidy
+
+# Windows (PowerShell): enable CGO and ensure gcc is in PATH
+$env:CGO_ENABLED="1"
+go build -o oracle-mcp.exe .
+
+# Windows (CMD)
+set CGO_ENABLED=1
+go build -o oracle-mcp.exe .
+
+# Windows (MSYS UCRT64)
+export PATH=/c/oracle/instantclient_21_12:$PATH
+export ORACLE_HOME=/c/oracle/instantclient_21_12
+pacman -S mingw-w64-ucrt-x86_64-go
+export GOROOT=/ucrt64/lib/go
+export PATH=$GOROOT/bin:$PATH
+export CGO_ENABLED=1
+export CC=x86_64-w64-mingw32-gcc
+go install github.com/godror/godror@latest
+CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o oracle-mcp.exe .
+
+# macOS (Intel): native build only
+CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o oracle-mcp .
+
+# macOS (Apple Silicon)
+CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o oracle-mcp .
+```
+
+### Build troubleshooting
+
+| Error | Cause | Fix |
+|-------|------|-----|
+| `undefined: VersionInfo` | CGO disabled | Set `CGO_ENABLED=1` and install gcc |
+| `gcc not found` | gcc not installed or not in PATH | Install MinGW-w64 and add its `bin` to PATH |
+| `cannot parse gcc output ... as ELF, Mach-O, PE, XCOFF` | Wrong gcc (e.g. **Cygwin gcc**) | Use **MinGW-w64** gcc and put it before Cygwin in PATH; verify with `where gcc` and `gcc -v` |
+
+After changing gcc or PATH, clear the build cache and rebuild:
+
+```bash
+go clean -cache
+go build -o oracle-mcp.exe .
+```
 
 ## License
 
