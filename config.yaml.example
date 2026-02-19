@@ -1,5 +1,7 @@
 # Oracle MCP Server Configuration
 # Copy this file to config.yaml and modify as needed
+# Author: Alvin Liu — https://alvinliu.com
+# Github: https://github.com/kjstart/cursor_oracle_mcp_server
 
 # Oracle Database Connection (required). Name -> DSN. With one entry, all SQL uses that DB.
 # With multiple entries, pass "connection" in execute_sql (see list_connections).

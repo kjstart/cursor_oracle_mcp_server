@@ -4,7 +4,7 @@
 
 A Model Context Protocol (MCP) server for Oracle Database, enabling AI assistants like Cursor to execute SQL statements directly against Oracle databases.
 
-**Alvin Liu** — [https://alvinliu.com](https://alvinliu.com)
+**Alvin Liu** — [https://alvinliu.com](https://alvinliu.com) · **Project:** [https://github.com/kjstart/cursor_oracle_mcp_server](https://github.com/kjstart/cursor_oracle_mcp_server)
 
 ## Features
 
