@@ -153,12 +153,43 @@ With **one** connection, all SQL runs against that database (no need to pass `co
 | `ORACLE_MCP_CONFIG` | Path to config file (overrides default locations) |
 | `ORACLE_HOME` | Oracle client installation path |
 | `PATH` (Windows) | Must include Instant Client directory |
+| `TNS_ADMIN` | **Required for Oracle Autonomous Database (ADB)** — directory containing `tnsnames.ora` and wallet files (e.g. `cwallet.sso`, `ewallet.pem`, `sqlnet.ora`) from the ADB Wallet zip |
+
+### Oracle Autonomous Database (ADB) with Wallet
+
+ADB uses **TCPS (SSL)** and requires the **Wallet**. Use the TNS name from the wallet’s `tnsnames.ora` (e.g. `mcpdemo_high`):
+
+1. **Download Wallet**: Oracle Cloud Console → your Autonomous Database → **DB connection** → **Download Wallet**. Unzip to a folder (e.g. `D:\oracle\wallet_mcpdemo`). The folder must contain `tnsnames.ora`, `sqlnet.ora`, `cwallet.sso`, `ewallet.pem`, etc.
+2. **config.yaml** — use TNS alias and your DB user/password:
+   ```yaml
+   oracle:
+     connections:
+       mcpdemo: "mcpdemo/YourPassword@mcpdemo_high"
+   ```
+3. **Cursor MCP** — set `TNS_ADMIN` to the **Wallet directory** so the process can find `tnsnames.ora` and SSL certs. On Windows, also include Instant Client in `PATH`:
+   ```json
+   {
+     "mcpServers": {
+       "oracle": {
+         "command": "D:\\work\\code\\cursor_oracle_mcp_server\\oracle-mcp.exe",
+         "args": [],
+         "env": {
+           "TNS_ADMIN": "D:\\oracle\\wallet_mcpdemo",
+           "PATH": "C:\\path\\to\\instantclient;%PATH%"
+         }
+       }
+     }
+   }
+   ```
+   Replace `D:\oracle\wallet_mcpdemo` with your unzipped wallet path, and ensure Instant Client is on `PATH`. Without `TNS_ADMIN`, you may see **ORA-12541** (no listener) or SSL errors because the client cannot resolve the TNS name or use the wallet.
 
 ## Usage with Cursor
 
 ### MCP Configuration
 
-Add to your Cursor MCP settings (`~/.cursor/mcp.json` or workspace settings):
+Add to your Cursor MCP settings (`~/.cursor/mcp.json` or workspace `.cursor/mcp.json`):
+
+**Windows:**
 
 ```json
 {
@@ -170,6 +201,26 @@ Add to your Cursor MCP settings (`~/.cursor/mcp.json` or workspace settings):
   }
 }
 ```
+
+**macOS (with Oracle Instant Client path):**  
+Use the `env` block so the MCP process sees `ORACLE_HOME` and `DYLD_LIBRARY_PATH`:
+
+```json
+{
+  "mcpServers": {
+    "oracle": {
+      "command": "/path/to/oracle-mcp",
+      "args": [],
+      "env": {
+        "ORACLE_HOME": "/opt/oracle/instantclient_19_20",
+        "DYLD_LIBRARY_PATH": "/opt/oracle/instantclient_19_20"
+      }
+    }
+  }
+}
+```
+
+Replace `/opt/oracle/instantclient_19_20` with your actual Instant Client directory. You can also reference existing shell env with `"ORACLE_HOME": "${env:ORACLE_HOME}"` if Cursor was started from a terminal that already has it set.
 
 ### Tools
 

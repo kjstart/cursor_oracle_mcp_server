@@ -171,6 +171,12 @@ func IsPLSQLCreationStatement(sql string) bool {
 	return isPLSQLCreationDDL(sql)
 }
 
+// KeepTrailingSemicolon reports whether the statement should be sent to Oracle with its trailing semicolon.
+// True for CREATE PROC/FUNC/PACKAGE and for anonymous blocks (BEGIN...END;), which require the final semicolon.
+func KeepTrailingSemicolon(sql string) bool {
+	return isPLSQLCreationDDL(sql) || isAnonymousBlock(sql)
+}
+
 // isPLSQLCreationDDL reports whether the SQL is a single CREATE PROCEDURE/FUNCTION/PACKAGE ... END; block.
 // Leading comments (-- or /* */) and blank lines are ignored so that files starting with comments are still detected.
 func isPLSQLCreationDDL(sql string) bool {

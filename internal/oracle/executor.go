@@ -97,8 +97,8 @@ func (e *Executor) Execute(ctx context.Context, sqlText string, statementType st
 		if !strings.HasSuffix(st, ";") {
 			st = st + ";"
 		}
-		// Keep trailing semicolon for PL/SQL creation (CREATE PROCEDURE/FUNCTION/PACKAGE ... END xxx;) so Oracle compiles correctly
-		if !sqlanalyzer.IsPLSQLCreationStatement(st) {
+		// Keep trailing semicolon for PL/SQL creation and anonymous blocks (BEGIN...END;) so Oracle compiles/runs correctly
+		if !sqlanalyzer.KeepTrailingSemicolon(st) {
 			st = strings.TrimSuffix(st, ";") // Oracle driver does not want trailing semicolon for ordinary SQL
 		}
 		st = strings.TrimSpace(st)
