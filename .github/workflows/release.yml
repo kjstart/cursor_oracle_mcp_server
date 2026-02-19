@@ -1,6 +1,5 @@
 name: Build and Release Binaries
 
-# Triggers: on push of a tag starting with 'v' (e.g. v1.0.0), or when run manually from the Actions tab
 on:
   push:
     tags:
@@ -12,22 +11,14 @@ jobs:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     
-    # Matrix: build on each OS natively to avoid CGO cross-compilation issues
     strategy:
+      fail-fast: false # Prevent one OS failure from cancelling other matrix jobs
       matrix:
         include:
-          - os: ubuntu-latest
-            binary_name: oracle-mcp-server-linux-amd64
-            asset_name: oracle-mcp-server-linux-amd64
           - os: windows-latest
-            binary_name: oracle-mcp-server.exe
             asset_name: oracle-mcp-server-windows-amd64.exe
-          - os: macos-latest # M1/M2 Apple Silicon
-            binary_name: oracle-mcp-server
+          - os: macos-latest
             asset_name: oracle-mcp-server-darwin-arm64
-          - os: macos-13 # Intel Mac
-            binary_name: oracle-mcp-server
-            asset_name: oracle-mcp-server-darwin-amd64
 
     steps:
       - name: Checkout Code
@@ -36,32 +27,42 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x' # Matches the Go version required by the project
+          go-version: '1.22.x'
           cache: true
 
       - name: Install Dependencies
         run: go mod tidy
 
-      # Build on Windows
+      # 1. Build on Windows
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           $env:CGO_ENABLED="1"
-          go build -ldflags="-s -w" -o ${{ matrix.binary_name }} .
-          Rename-Item -Path ${{ matrix.binary_name }} -NewName ${{ matrix.asset_name }}
-
-      # Build on Linux and macOS
-      - name: Build (Linux & macOS)
-        if: matrix.os != 'windows-latest'
-        run: |
-          export CGO_ENABLED=1
           go build -ldflags="-s -w" -o ${{ matrix.asset_name }} .
 
-      # Upload to GitHub Releases
+      # 2. Build on macOS (Apple Silicon M1/M2/M3) natively
+      - name: Build (macOS ARM64)
+        if: matrix.os == 'macos-latest'
+        run: |
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=arm64
+          go build -ldflags="-s -w" -o ${{ matrix.asset_name }} .
+
+      # 3. Cross-compile Intel (amd64) on macOS using built-in clang
+      - name: Build (macOS Intel)
+        if: matrix.os == 'macos-latest'
+        run: |
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=amd64
+          go build -ldflags="-s -w" -o oracle-mcp-server-darwin-amd64 .
+
+      # 4. Upload all built binaries using a glob pattern
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: ${{ matrix.asset_name }}
+          files: oracle-mcp-server-*
           generate_release_notes: true
