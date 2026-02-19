@@ -20,8 +20,10 @@ jobs:
         include:
           - os: windows-latest
             asset_name: oracle-mcp-server-windows-amd64.exe
+            archive_name: oracle-mcp-server-windows-amd64.zip
           - os: macos-latest
             asset_name: oracle-mcp-server-darwin-arm64
+            archive_name: oracle-mcp-server-darwin-arm64.tar.gz
 
     steps:
       - name: Checkout Code
@@ -36,36 +38,44 @@ jobs:
       - name: Install Dependencies
         run: go mod tidy
 
-      # 1. Build on Windows
-      - name: Build (Windows)
+      # 1. Build and Package on Windows
+      - name: Build and Package (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           $env:CGO_ENABLED="1"
           go build -ldflags="-s -w" -o ${{ matrix.asset_name }} .
+          # Package files into zip using PowerShell
+          Compress-Archive -Path ${{ matrix.asset_name }}, user_guide.md, config.yaml.example -DestinationPath ${{ matrix.archive_name }}
 
-      # 2. Build on macOS (Apple Silicon M1/M2/M3) natively
-      - name: Build (macOS ARM64)
+      # 2. Build and Package on macOS (Apple Silicon M1/M2/M3) natively
+      - name: Build and Package (macOS ARM64)
         if: matrix.os == 'macos-latest'
         run: |
           export CGO_ENABLED=1
           export GOOS=darwin
           export GOARCH=arm64
           go build -ldflags="-s -w" -o ${{ matrix.asset_name }} .
+          # Package files into tar.gz
+          tar -czvf ${{ matrix.archive_name }} ${{ matrix.asset_name }} user_guide.md config.yaml.example
 
-      # 3. Cross-compile Intel (amd64) on macOS using built-in clang
-      - name: Build (macOS Intel)
+      # 3. Cross-compile and Package Intel (amd64) on macOS using built-in clang
+      - name: Build and Package (macOS Intel)
         if: matrix.os == 'macos-latest'
         run: |
           export CGO_ENABLED=1
           export GOOS=darwin
           export GOARCH=amd64
           go build -ldflags="-s -w" -o oracle-mcp-server-darwin-amd64 .
+          # Package files into tar.gz
+          tar -czvf oracle-mcp-server-darwin-amd64.tar.gz oracle-mcp-server-darwin-amd64 user_guide.md config.yaml.example
 
-      # 4. Upload all built binaries using a glob pattern
+      # 4. Upload all built archives using glob patterns
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: oracle-mcp-server-*
+          files: |
+            *.zip
+            *.tar.gz
           generate_release_notes: true
