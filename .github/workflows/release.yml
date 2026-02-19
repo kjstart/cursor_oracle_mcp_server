@@ -1,0 +1,67 @@
+name: Build and Release Binaries
+
+# Triggers: on push of a tag starting with 'v' (e.g. v1.0.0), or when run manually from the Actions tab
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    # Matrix: build on each OS natively to avoid CGO cross-compilation issues
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            binary_name: oracle-mcp-server-linux-amd64
+            asset_name: oracle-mcp-server-linux-amd64
+          - os: windows-latest
+            binary_name: oracle-mcp-server.exe
+            asset_name: oracle-mcp-server-windows-amd64.exe
+          - os: macos-latest # M1/M2 Apple Silicon
+            binary_name: oracle-mcp-server
+            asset_name: oracle-mcp-server-darwin-arm64
+          - os: macos-13 # Intel Mac
+            binary_name: oracle-mcp-server
+            asset_name: oracle-mcp-server-darwin-amd64
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x' # Matches the Go version required by the project
+          cache: true
+
+      - name: Install Dependencies
+        run: go mod tidy
+
+      # Build on Windows
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED="1"
+          go build -ldflags="-s -w" -o ${{ matrix.binary_name }} .
+          Rename-Item -Path ${{ matrix.binary_name }} -NewName ${{ matrix.asset_name }}
+
+      # Build on Linux and macOS
+      - name: Build (Linux & macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          export CGO_ENABLED=1
+          go build -ldflags="-s -w" -o ${{ matrix.asset_name }} .
+
+      # Upload to GitHub Releases
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ${{ matrix.asset_name }}
+          generate_release_notes: true
