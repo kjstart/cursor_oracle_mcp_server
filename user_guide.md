@@ -6,7 +6,7 @@
 
 **Author:** [Alvin Liu ](https://alvinliu.com)
 
-**GitHub:** [cursor_oracle_mcp_server](https://github.com/kjstart/cursor_oracle_mcp_server)
+**GitHub:** [https://github.com/kjstart/cursor_oracle_mcp_server](https://github.com/kjstart/cursor_oracle_mcp_server)
 
 This guide assumes you have downloaded the release zip containing the binary for your platform (e.g. `oracle-mcp-server-windows-amd64.exe`, `oracle-mcp-server-darwin-arm64`, or `oracle-mcp-server-darwin-amd64`) and `config.yaml.example`, and extracted it locally.
 
@@ -175,7 +175,7 @@ This guide assumes you have downloaded the release zip containing the binary for
 
 **作者：** [Alvin Liu](https://alvinliu.com)
 
-**项目：** [cursor_oracle_mcp_server](https://github.com/kjstart/cursor_oracle_mcp_server)
+**项目：** [https://github.com/kjstart/cursor_oracle_mcp_server](https://github.com/kjstart/cursor_oracle_mcp_server)
 
 本指南假设你已下载包含本平台可执行文件的发布包（如 `oracle-mcp-server-windows-amd64.exe`、`oracle-mcp-server-darwin-arm64` 或 `oracle-mcp-server-darwin-amd64`）以及 `config.yaml.example`，并已解压到本地。
 
