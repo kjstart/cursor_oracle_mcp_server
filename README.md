@@ -10,7 +10,7 @@ A Model Context Protocol (MCP) server for Oracle Database, enabling AI assistant
 
 ## 🎬 Demo Video
 👉 Click the image below to watch on YouTube
-[![Cursor Oracle MCP Demo](https://www.alvinliu.com/wp-content/uploads/2026/02/a3f08b34-d774-48ce-453b-67e6d5cdb981-768x406-3.png)](https://www.youtube.com/watch?v=3U1nWj9tP24)
+[![Cursor Oracle MCP Demo](https://www.alvinliu.com/wp-content/uploads/2026/02/oracle_mcp_youtube.png)](https://www.youtube.com/watch?v=3U1nWj9tP24)
 
 ## Features
 
