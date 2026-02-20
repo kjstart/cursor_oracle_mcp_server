@@ -8,7 +8,10 @@ A Model Context Protocol (MCP) server for Oracle Database, enabling AI assistant
 
 **Alvin Liu** — [https://alvinliu.com](https://alvinliu.com) · **Project:** [https://github.com/kjstart/cursor_oracle_mcp_server](https://github.com/kjstart/cursor_oracle_mcp_server)
 
-[![Video Title](https://www.alvinliu.com/wp-content/uploads/2026/02/a3f08b34-d774-48ce-453b-67e6d5cdb981-768x406-3.png)](https://www.youtube.com/watch?v=3U1nWj9tP24)
+## 🎬 Demo Video
+<a href="https://www.youtube.com/watch?v=3U1nWj9tP24" target="_blank" rel="noopener">
+  <img src="https://www.alvinliu.com/wp-content/uploads/2026/02/a3f08b34-d774-48ce-453b-67e6d5cdb981-768x406-3.png" width="720">
+</a>
 
 ## Features
 
