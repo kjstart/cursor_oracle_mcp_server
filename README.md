@@ -2,8 +2,9 @@
 
 <a id="english"></a>
 
-# New Project DB MCP Supports connect to all Database products
-[https://github.com/kjstart/db_mcp](https://github.com/kjstart/db_mcp)
+# New Project: Cursor DB MCP  
+Supports connecting to any database via JDBC.  
+👉[https://github.com/kjstart/cursor_db_mcp](https://github.com/kjstart/cursor_db_mcp)
 
 
 # Oracle MCP Server
@@ -354,8 +355,8 @@ MIT License - see [LICENSE](LICENSE) file
 
 [English](#english) | [中文](#chinese)
 
-# 新项目 DB MCP 可以连接到各种数据库产品(包括OceanBase等信创数据库)
-[https://github.com/kjstart/db_mcp](https://github.com/kjstart/db_mcp)
+# 新项目 Cursor DB MCP 可以连接到各种数据库产品(包括OceanBase等信创数据库)
+👉[https://github.com/kjstart/cursor_db_mcp](https://github.com/kjstart/cursor_db_mcp)
 
 # Oracle MCP Server（中文）
 
