@@ -2,6 +2,10 @@
 
 <a id="english"></a>
 
+# New Project DB MCP Supports connect to all Database products
+[https://github.com/kjstart/db_mcp](https://github.com/kjstart/db_mcp)
+
+
 # Oracle MCP Server
 
 A Model Context Protocol (MCP) server for Oracle Database, enabling AI assistants like Cursor to execute SQL statements directly against Oracle databases.
@@ -349,6 +353,9 @@ MIT License - see [LICENSE](LICENSE) file
 <a id="chinese"></a>
 
 [English](#english) | [中文](#chinese)
+
+# 新项目 DB MCP 可以连接到各种数据库产品(包括OceanBase等信创数据库)
+[https://github.com/kjstart/db_mcp](https://github.com/kjstart/db_mcp)
 
 # Oracle MCP Server（中文）
 
