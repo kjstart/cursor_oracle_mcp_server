@@ -365,6 +365,8 @@ MIT License - see [LICENSE](LICENSE) file
 
 **作者：Alvin Liu** — [https://alvinliu.com](https://alvinliu.com) · **项目：** [https://github.com/kjstart/cursor_oracle_mcp_server](https://github.com/kjstart/cursor_oracle_mcp_server)
 
+B站视频介绍: [Cursor连接Oracle自动编写存储过程](https://www.bilibili.com/video/BV1EbfLBREDC)
+
 ## 功能
 
 - **完整 SQL 支持**：SELECT、INSERT、UPDATE、DELETE、DDL（CREATE、DROP、ALTER 等），单次请求可执行多条语句
