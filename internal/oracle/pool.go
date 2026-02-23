@@ -142,6 +142,62 @@ func (p *ExecutorPool) Execute(ctx context.Context, connectionName string, sqlTe
 	return result, err
 }
 
+// ExecuteToCSVFile runs the SQL on the named connection and writes the result to a CSV file.
+// filePath must be absolute. Returns rows written.
+func (p *ExecutorPool) ExecuteToCSVFile(ctx context.Context, connectionName string, sqlText string, filePath string) (int64, error) {
+	name, ex, err := p.executorByName(connectionName)
+	if err != nil {
+		return 0, err
+	}
+	n, err := ex.ExecuteToCSVFile(ctx, sqlText, filePath)
+	if err != nil && p.isConnectionError(err) {
+		p.markConnectionFailed(name, ex)
+	}
+	return n, err
+}
+
+// ExecuteToTextFile runs the SQL on the named connection and writes the result to a plain text file.
+// filePath must be absolute. Returns rows written.
+func (p *ExecutorPool) ExecuteToTextFile(ctx context.Context, connectionName string, sqlText string, filePath string) (int64, error) {
+	name, ex, err := p.executorByName(connectionName)
+	if err != nil {
+		return 0, err
+	}
+	n, err := ex.ExecuteToTextFile(ctx, sqlText, filePath)
+	if err != nil && p.isConnectionError(err) {
+		p.markConnectionFailed(name, ex)
+	}
+	return n, err
+}
+
+// executorByName returns the resolved connection name and executor, or error if not found / unavailable.
+func (p *ExecutorPool) executorByName(connectionName string) (resolvedName string, ex *Executor, err error) {
+	name := connectionName
+	if name == "" {
+		p.mu.RLock()
+		n := len(p.names)
+		if n == 1 {
+			name = p.names[0]
+		}
+		p.mu.RUnlock()
+		if name == "" {
+			return "", nil, fmt.Errorf("connection name is required when multiple databases are configured; use list_connections to see names")
+		}
+	}
+
+	p.mu.RLock()
+	exec, ok := p.executors[name]
+	_, inFailed := p.failed[name]
+	p.mu.RUnlock()
+	if !ok {
+		if inFailed {
+			return "", nil, fmt.Errorf("connection %q is currently unavailable (connection failed); call list_connections to retry", name)
+		}
+		return "", nil, fmt.Errorf("unknown connection %q; use list_connections to see configured names", name)
+	}
+	return name, exec, nil
+}
+
 // isConnectionError returns true if the error indicates a broken/dead connection
 // (TNS, listener, network, etc.) so we can demote the connection to failed.
 func (p *ExecutorPool) isConnectionError(err error) bool {

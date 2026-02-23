@@ -318,6 +318,50 @@ func (s *Server) handleToolsList(req *jsonRPCRequest) {
 					Required:   []string{},
 				},
 			},
+			{
+				Name:        "query_to_csv_file",
+				Description: "Execute the given SQL and write the result to a file as CSV (header + data rows, UTF-8). Format follows RFC 4180. CLOB columns are read in full. file_path must be absolute. No confirmation dialog.",
+				InputSchema: inputSchema{
+					Type: "object",
+					Properties: map[string]property{
+						"sql": {
+							Type:        "string",
+							Description: "SQL to run (e.g. SELECT). Single or multiple statements; last result is written.",
+						},
+						"file_path": {
+							Type:        "string",
+							Description: "Absolute path of the output CSV file.",
+						},
+						"connection": {
+							Type:        "string",
+							Description: "Which configured database to use. Required when multiple connections; omit when only one.",
+						},
+					},
+					Required: []string{"sql", "file_path"},
+				},
+			},
+			{
+				Name:        "query_to_text_file",
+				Description: "Execute the given SQL and write the result to a file as plain text: no header, columns tab-separated. No extra newlines between rows; only newlines in the cell data are written. CLOB columns are read in full. Use for procedure source or any query (including CLOB). file_path must be absolute. No confirmation dialog.",
+				InputSchema: inputSchema{
+					Type: "object",
+					Properties: map[string]property{
+						"sql": {
+							Type:        "string",
+							Description: "SQL to run (e.g. SELECT text FROM user_source ...). Single or multiple statements; last result is written.",
+						},
+						"file_path": {
+							Type:        "string",
+							Description: "Absolute path of the output text file (e.g. .sql).",
+						},
+						"connection": {
+							Type:        "string",
+							Description: "Which configured database to use. Required when multiple connections; omit when only one.",
+						},
+					},
+					Required: []string{"sql", "file_path"},
+				},
+			},
 		},
 	}
 
@@ -339,6 +383,10 @@ func (s *Server) handleToolsCall(req *jsonRPCRequest) {
 		s.handleExecuteSQLFile(req, params.Arguments)
 	case "list_connections":
 		s.handleListConnections(req)
+	case "query_to_csv_file":
+		s.handleQueryToCSVFile(req, params.Arguments)
+	case "query_to_text_file":
+		s.handleQueryToTextFile(req, params.Arguments)
 	default:
 		s.sendError(req.ID, ErrCodeMethodNotFound, fmt.Sprintf("Unknown tool: %s", params.Name), nil)
 	}
@@ -559,6 +607,158 @@ func (s *Server) handleListConnections(req *jsonRPCRequest) {
 	out := map[string]interface{}{
 		"connections": statuses,
 		"message":     "Use these names as the 'connection' argument in execute_sql. Disabled connections are currently unreachable; they will be retried on each list_connections call.",
+	}
+	resultJSON, _ := json.MarshalIndent(out, "", "  ")
+	s.sendToolResult(req.ID, string(resultJSON))
+}
+
+// handleQueryToCSVFile handles the query_to_csv_file tool. No confirmation dialog; file_path must be absolute.
+func (s *Server) handleQueryToCSVFile(req *jsonRPCRequest, args map[string]interface{}) {
+	sqlArg, ok := args["sql"]
+	if !ok {
+		s.sendToolError(req.ID, "Missing required parameter: sql")
+		return
+	}
+	sqlStr, ok := sqlArg.(string)
+	if !ok {
+		s.sendToolError(req.ID, "Parameter 'sql' must be a string")
+		return
+	}
+	sqlStr = strings.TrimSpace(sqlStr)
+	if sqlStr == "" {
+		s.sendToolError(req.ID, "sql cannot be empty")
+		return
+	}
+
+	pathArg, ok := args["file_path"]
+	if !ok {
+		s.sendToolError(req.ID, "Missing required parameter: file_path")
+		return
+	}
+	filePath, ok := pathArg.(string)
+	if !ok {
+		s.sendToolError(req.ID, "Parameter 'file_path' must be a string")
+		return
+	}
+	filePath = strings.TrimSpace(filePath)
+	if !filepath.IsAbs(filePath) {
+		s.sendToolError(req.ID, "file_path must be an absolute path")
+		return
+	}
+
+	connectionName := ""
+	if c, ok := args["connection"]; ok && c != nil {
+		if cs, ok := c.(string); ok {
+			connectionName = strings.TrimSpace(cs)
+		}
+	}
+	displayConnection := connectionName
+	if displayConnection == "" {
+		names := s.executorPool.Names()
+		if len(names) == 1 {
+			displayConnection = names[0]
+		} else if len(names) > 1 {
+			s.sendToolError(req.ID, "Multiple connections configured; specify 'connection' (call list_connections for names).")
+			return
+		}
+	}
+	if displayConnection == "" {
+		displayConnection = "default"
+	}
+
+	ctx := context.Background()
+	rowsWritten, err := s.executorPool.ExecuteToCSVFile(ctx, connectionName, sqlStr, filePath)
+	if err != nil {
+		s.logAudit(sqlStr, nil, false, "QUERY_TO_CSV_ERROR: "+err.Error(), displayConnection)
+		if strings.Contains(strings.ToLower(err.Error()), "unavailable") || strings.Contains(strings.ToLower(err.Error()), "connection") {
+			s.sendToolError(req.ID, "Connection is currently unavailable; call list_connections to retry.")
+		} else {
+			s.sendToolError(req.ID, "query_to_csv_file failed: "+err.Error())
+		}
+		return
+	}
+
+	s.logAudit(sqlStr, nil, true, "QUERY_TO_CSV", displayConnection)
+	out := map[string]interface{}{
+		"file_path":     filePath,
+		"rows_written":  rowsWritten,
+		"message":       "CSV written to " + filePath,
+	}
+	resultJSON, _ := json.MarshalIndent(out, "", "  ")
+	s.sendToolResult(req.ID, string(resultJSON))
+}
+
+// handleQueryToTextFile handles the query_to_text_file tool. No confirmation dialog; file_path must be absolute.
+func (s *Server) handleQueryToTextFile(req *jsonRPCRequest, args map[string]interface{}) {
+	sqlArg, ok := args["sql"]
+	if !ok {
+		s.sendToolError(req.ID, "Missing required parameter: sql")
+		return
+	}
+	sqlStr, ok := sqlArg.(string)
+	if !ok {
+		s.sendToolError(req.ID, "Parameter 'sql' must be a string")
+		return
+	}
+	sqlStr = strings.TrimSpace(sqlStr)
+	if sqlStr == "" {
+		s.sendToolError(req.ID, "sql cannot be empty")
+		return
+	}
+
+	pathArg, ok := args["file_path"]
+	if !ok {
+		s.sendToolError(req.ID, "Missing required parameter: file_path")
+		return
+	}
+	filePath, ok := pathArg.(string)
+	if !ok {
+		s.sendToolError(req.ID, "Parameter 'file_path' must be a string")
+		return
+	}
+	filePath = strings.TrimSpace(filePath)
+	if !filepath.IsAbs(filePath) {
+		s.sendToolError(req.ID, "file_path must be an absolute path")
+		return
+	}
+
+	connectionName := ""
+	if c, ok := args["connection"]; ok && c != nil {
+		if cs, ok := c.(string); ok {
+			connectionName = strings.TrimSpace(cs)
+		}
+	}
+	displayConnection := connectionName
+	if displayConnection == "" {
+		names := s.executorPool.Names()
+		if len(names) == 1 {
+			displayConnection = names[0]
+		} else if len(names) > 1 {
+			s.sendToolError(req.ID, "Multiple connections configured; specify 'connection' (call list_connections for names).")
+			return
+		}
+	}
+	if displayConnection == "" {
+		displayConnection = "default"
+	}
+
+	ctx := context.Background()
+	rowsWritten, err := s.executorPool.ExecuteToTextFile(ctx, connectionName, sqlStr, filePath)
+	if err != nil {
+		s.logAudit(sqlStr, nil, false, "QUERY_TO_TEXT_ERROR: "+err.Error(), displayConnection)
+		if strings.Contains(strings.ToLower(err.Error()), "unavailable") || strings.Contains(strings.ToLower(err.Error()), "connection") {
+			s.sendToolError(req.ID, "Connection is currently unavailable; call list_connections to retry.")
+		} else {
+			s.sendToolError(req.ID, "query_to_text_file failed: "+err.Error())
+		}
+		return
+	}
+
+	s.logAudit(sqlStr, nil, true, "QUERY_TO_TEXT", displayConnection)
+	out := map[string]interface{}{
+		"file_path":     filePath,
+		"rows_written":  rowsWritten,
+		"message":       "Text written to " + filePath,
 	}
 	resultJSON, _ := json.MarshalIndent(out, "", "  ")
 	s.sendToolResult(req.ID, string(resultJSON))

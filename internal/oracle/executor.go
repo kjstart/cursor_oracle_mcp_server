@@ -4,7 +4,10 @@ package oracle
 import (
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -207,6 +210,7 @@ func (e *Executor) executeStatement(ctx context.Context, sqlText string, result 
 }
 
 // convertValue converts database values to JSON-serializable types.
+// CLOB columns (when the driver returns io.Reader or []byte) are read in full and returned as string.
 func convertValue(v interface{}) interface{} {
 	if v == nil {
 		return nil
@@ -217,6 +221,15 @@ func convertValue(v interface{}) interface{} {
 		return string(val)
 	case time.Time:
 		return val.Format(time.RFC3339)
+	case io.Reader:
+		b, err := io.ReadAll(val)
+		if closer, ok := v.(io.Closer); ok {
+			_ = closer.Close()
+		}
+		if err != nil {
+			return "<CLOB read error: " + err.Error() + ">"
+		}
+		return string(b)
 	default:
 		return val
 	}
@@ -240,4 +253,114 @@ func isDDLStatement(stmtType string) bool {
 // TestConnection tests the database connection.
 func (e *Executor) TestConnection(ctx context.Context) error {
 	return e.db.PingContext(ctx)
+}
+
+// ExecuteToCSVFile runs the SQL (same as Execute), then writes the result to a CSV file.
+// Header row + data rows, UTF-8. RFC 4180: fields containing comma, quote, or newline are quoted; " escaped as "".
+// CLOB columns are read in full (via convertValue). Returns rows written, or 0 and error on failure.
+func (e *Executor) ExecuteToCSVFile(ctx context.Context, sqlText string, filePath string) (int64, error) {
+	stmtType := sqlanalyzer.GetStatementType(sqlText)
+	result, err := e.Execute(ctx, sqlText, stmtType)
+	if err != nil {
+		return 0, err
+	}
+	if !result.Success {
+		return 0, fmt.Errorf("execution failed: %s", result.Warning)
+	}
+
+	f, err := os.Create(filePath)
+	if err != nil {
+		return 0, fmt.Errorf("create file: %w", err)
+	}
+	defer f.Close()
+
+	// UTF-8 BOM optional; many tools expect it for CSV. Omit for simplicity.
+	w := csv.NewWriter(f)
+	var rowsWritten int64
+
+	if len(result.Columns) > 0 && result.Rows != nil {
+		if err := w.Write(result.Columns); err != nil {
+			return 0, fmt.Errorf("write header: %w", err)
+		}
+		for _, row := range result.Rows {
+			cells := make([]string, len(row))
+			for i, v := range row {
+				cells[i] = cellToString(v)
+			}
+			if err := w.Write(cells); err != nil {
+				return 0, fmt.Errorf("write row: %w", err)
+			}
+			rowsWritten++
+		}
+	} else {
+		if err := w.Write([]string{fmt.Sprintf("Rows affected: %d", result.RowsAffected)}); err != nil {
+			return 0, fmt.Errorf("write row: %w", err)
+		}
+		rowsWritten = result.RowsAffected
+	}
+
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return 0, err
+	}
+	return rowsWritten, nil
+}
+
+// ExecuteToTextFile runs the SQL (same as Execute), then writes the result to a plain text file.
+// No header; columns tab-separated per row. No extra newlines between rows (only newlines in cell data are written).
+// CLOB columns are read in full. UTF-8. Returns rows written.
+func (e *Executor) ExecuteToTextFile(ctx context.Context, sqlText string, filePath string) (int64, error) {
+	stmtType := sqlanalyzer.GetStatementType(sqlText)
+	result, err := e.Execute(ctx, sqlText, stmtType)
+	if err != nil {
+		return 0, err
+	}
+	if !result.Success {
+		return 0, fmt.Errorf("execution failed: %s", result.Warning)
+	}
+
+	f, err := os.Create(filePath)
+	if err != nil {
+		return 0, fmt.Errorf("create file: %w", err)
+	}
+	defer f.Close()
+
+	var rowsWritten int64
+
+	if len(result.Columns) > 0 && result.Rows != nil {
+		for _, row := range result.Rows {
+			for i, v := range row {
+				if i > 0 {
+					_, _ = f.WriteString("\t")
+				}
+				if v != nil {
+					_, _ = f.WriteString(cellToString(v))
+				}
+			}
+			// No newline between rows (match Java: only newlines in cell data)
+			rowsWritten++
+		}
+	} else {
+		_, _ = fmt.Fprintf(f, "Rows affected: %d\n", result.RowsAffected)
+		rowsWritten = result.RowsAffected
+	}
+
+	return rowsWritten, nil
+}
+
+// cellToString converts a cell value to string for CSV/text output.
+func cellToString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	case []byte:
+		return string(val)
+	case time.Time:
+		return val.Format(time.RFC3339)
+	default:
+		return fmt.Sprint(val)
+	}
 }

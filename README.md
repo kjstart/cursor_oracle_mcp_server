@@ -14,10 +14,11 @@ A Model Context Protocol (MCP) server for Oracle Database, enabling AI assistant
 
 - **Full SQL support**: SELECT, INSERT, UPDATE, DELETE, DDL (CREATE, DROP, ALTER, etc.), and multiple statements per request
 - **Execute from file**: Run a full SQL file via `execute_sql_file`; trailing SQL*Plus `/` is stripped automatically
+- **Query to file**: `query_to_csv_file` (result as CSV, RFC 4180, UTF-8) and `query_to_text_file` (plain text, tab-separated, CLOB in full; e.g. for procedure source)
 - **PL/SQL blocks**: CREATE PROCEDURE/FUNCTION/PACKAGE (including files with leading comments) and anonymous blocks are executed as one unit
 - **Human-in-the-loop**: Configurable danger keywords trigger a review window with full SQL (syntax-highlighted on Windows); Database | Action | Keywords | DDL on the first line, File on the second; focus stays on content, not buttons
 - **Danger keyword matching**: `whole_text` (substring in full SQL) or `tokens` (exact token match; e.g. `created_at` does not match `create`)
-- **Multi-database**: Configure multiple connections; use `list_connections` to see names and status (failed connections are retried on each list)
+- **Multi-database**: Configure multiple connections; use `list_connections` to see names and status (failed connections are retried on each list; only `list_connections` re-validates—other tools fast-fail on an unavailable connection until you call it again)
 - **Audit logging**: Keyed fields (`AUDIT_TIME`, `AUDIT_CONNECTION`, `AUDIT_KEYWORDS`, `AUDIT_APPROVED`, `AUDIT_ACTION`, `AUDIT_SQL`), full SQL, record separator `######AUDIT_END######`; 10MB rotation, reuse last non-full file on startup, filenames include creation date (e.g. `audit_2006-01-02_150405.log`)
 - **Cross-platform**: Windows (WinForms + WebBrowser for review), macOS (osascript dialog)
 - **Single executable**: Standalone binary (requires Oracle Instant Client)
@@ -179,7 +180,9 @@ Replace `/path/to/oracle-mcp` and `/opt/oracle/instantclient_19_20` with your ac
 |------|-------------|
 | **execute_sql** | Run SQL (one or multiple statements). Params: `sql`, optional `connection`. |
 | **execute_sql_file** | Read SQL from a file, analyze, show review if needed, then execute. Trailing `/` is stripped. Params: `file_path`, optional `connection`. |
-| **list_connections** | List configured connection names and availability; retries previously failed connections. |
+| **list_connections** | List configured connection names and availability; retries previously failed connections (only this tool re-validates—others fast-fail on unavailable connection until you call list_connections again). |
+| **query_to_csv_file** | Run a query and write the result to a file as CSV (header + rows, UTF-8, RFC 4180). Params: `sql`, `file_path` (absolute), optional `connection`. No confirmation dialog. |
+| **query_to_text_file** | Run a query and write the result to a file as plain text (tab-separated, no header; CLOB in full; e.g. for procedure source). Params: `sql`, `file_path` (absolute), optional `connection`. No confirmation dialog. |
 
 ### Example Interactions
 
@@ -196,6 +199,10 @@ execute_sql_file({ "file_path": "d:\\scripts\\myscript.sql", "connection": "ps" 
 
 // See connection names and status
 list_connections()
+
+// Write query result to CSV or text file (file_path must be absolute; no confirmation)
+query_to_csv_file({ "sql": "SELECT * FROM my_table", "file_path": "d:\\out\\data.csv", "connection": "database1" })
+query_to_text_file({ "sql": "SELECT text FROM user_source WHERE name='MY_PROC'", "file_path": "d:\\out\\my_proc.sql" })
 ```
 
 ## Safety and Review Window
@@ -237,7 +244,15 @@ Execution proceeds only after the user confirms. Rejection is logged and returne
 
 ### Tool: `list_connections`
 
-**Input**: none. **Output**: `connections` (name + availability), `message`.
+**Input**: none. **Output**: `connections` (name + availability), `message`. Only this tool re-validates failed connections; other tools return an error if the chosen connection is currently unavailable until you call list_connections again.
+
+### Tool: `query_to_csv_file`
+
+**Input**: `sql` (required), `file_path` (required, absolute path), `connection` (optional). **Output**: success and path. No confirmation dialog. Writes CSV with header, UTF-8, RFC 4180; CLOB columns read in full.
+
+### Tool: `query_to_text_file`
+
+**Input**: `sql` (required), `file_path` (required, absolute path), `connection` (optional). **Output**: success and path. No confirmation dialog. Writes plain text, tab-separated columns, no header; CLOB in full (e.g. for procedure source).
 
 ## Troubleshooting
 
@@ -358,10 +373,11 @@ MIT License - see [LICENSE](LICENSE) file
 
 - **完整 SQL 支持**：SELECT、INSERT、UPDATE、DELETE、DDL（CREATE、DROP、ALTER 等），单次请求可执行多条语句
 - **从文件执行**：通过 `execute_sql_file` 执行整个 SQL 文件；自动去除末尾 SQL*Plus 的 `/`
+- **查询结果写入文件**：`query_to_csv_file`（结果写为 CSV，RFC 4180，UTF-8）与 `query_to_text_file`（纯文本、制表符分隔、CLOB 完整输出，如存过程源码）
 - **PL/SQL 块**：CREATE PROCEDURE/FUNCTION/PACKAGE（含文件头部注释）及匿名块作为整体执行
 - **人工确认**：可配置危险关键词，触发带完整 SQL 的确认窗口（Windows 下语法高亮）；首行：数据库 | 操作 | 关键词 | DDL，第二行：文件（来自 `execute_sql_file` 时）；焦点在 SQL 内容而非按钮
 - **危险词匹配**：`whole_text`（整段 SQL 子串）或 `tokens`（精确词匹配，如 `created_at` 不匹配 `create`）
-- **多数据库**：可配置多个连接；用 `list_connections` 查看名称与状态（失败连接每次列出时会重试）
+- **多数据库**：可配置多个连接；用 `list_connections` 查看名称与状态（失败连接每次列出时会重试；仅 `list_connections` 会重新校验—其他工具在连接不可用时直接报错，需再次调用 list_connections 后重试）
 - **审计日志**：键值字段（`AUDIT_TIME`、`AUDIT_CONNECTION`、`AUDIT_KEYWORDS`、`AUDIT_APPROVED`、`AUDIT_ACTION`、`AUDIT_SQL`）、完整 SQL、记录分隔符 `######AUDIT_END######`；单文件 10MB 轮转，启动时复用最近未满的日志，文件名含创建日期（如 `audit_2006-01-02_150405.log`）
 - **跨平台**：Windows（WinForms + WebBrowser 确认）、macOS（osascript 对话框）
 - **单可执行文件**：独立二进制（需安装 Oracle Instant Client）
@@ -521,7 +537,9 @@ ADB 使用 **TCPS (SSL)**，需要 **Wallet**。连接串使用钱包中 `tnsnam
 |------|------|
 | **execute_sql** | 执行 SQL（单条或多条）。参数：`sql`，可选 `connection`。 |
 | **execute_sql_file** | 从文件读取 SQL，分析、必要时展示确认，再执行。末尾 `/` 会被去除。参数：`file_path`，可选 `connection`。 |
-| **list_connections** | 列出已配置连接名称及可用性；会对之前失败的连接重试。 |
+| **list_connections** | 列出已配置连接名称及可用性；会对之前失败的连接重试（仅此工具会重新校验—其他工具在连接不可用时直接报错，需再次调用 list_connections 后重试）。 |
+| **query_to_csv_file** | 执行查询并将结果写入文件为 CSV（表头+行，UTF-8，RFC 4180）。参数：`sql`、`file_path`（绝对路径），可选 `connection`。无确认对话框。 |
+| **query_to_text_file** | 执行查询并将结果写入文件为纯文本（制表符分隔、无表头；CLOB 完整输出，如存过程源码）。参数：`sql`、`file_path`（绝对路径），可选 `connection`。无确认对话框。 |
 
 ### 使用示例
 
@@ -538,6 +556,10 @@ execute_sql_file({ "file_path": "d:\\scripts\\myscript.sql", "connection": "ps" 
 
 // 查看连接名称与状态
 list_connections()
+
+// 将查询结果写入 CSV 或文本文件（file_path 须为绝对路径；无确认）
+query_to_csv_file({ "sql": "SELECT * FROM my_table", "file_path": "d:\\out\\data.csv", "connection": "database1" })
+query_to_text_file({ "sql": "SELECT text FROM user_source WHERE name='MY_PROC'", "file_path": "d:\\out\\my_proc.sql" })
 ```
 
 ## 安全与确认窗口
@@ -579,7 +601,15 @@ list_connections()
 
 ### 工具：`list_connections`
 
-**输入**：无。**输出**：`connections`（名称 + 可用性），`message`。
+**输入**：无。**输出**：`connections`（名称 + 可用性），`message`。仅此工具会重新校验失败连接；其他工具在所选连接不可用时直接报错，需再次调用 list_connections 后重试。
+
+### 工具：`query_to_csv_file`
+
+**输入**：`sql`（必填）、`file_path`（必填，绝对路径）、`connection`（可选）。**输出**：成功及路径。无确认对话框。写入带表头的 CSV，UTF-8，RFC 4180；CLOB 列完整读取。
+
+### 工具：`query_to_text_file`
+
+**输入**：`sql`（必填）、`file_path`（必填，绝对路径）、`connection`（可选）。**输出**：成功及路径。无确认对话框。写入纯文本，列以制表符分隔、无表头；CLOB 完整输出（如存过程源码）。
 
 ## 故障排除
 

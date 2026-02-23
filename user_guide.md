@@ -142,8 +142,8 @@ This guide assumes you have downloaded the release zip containing the binary for
    - Save `mcp.json`, then restart Cursor so the MCP server is loaded
 
 4. **Verify**
-   - If Oracle-related MCP tools (`execute_sql`, `execute_sql_file`, `list_connections`) appear in your chat, the setup is working
-   - With multiple databases: call `list_connections` to see names, then use `execute_sql` with `"connection": "database1"` (or the name you configured) to run SQL on a specific database
+   - If Oracle-related MCP tools (`execute_sql`, `execute_sql_file`, `list_connections`, `query_to_csv_file`, `query_to_text_file`) appear in your chat, the setup is working
+   - With multiple databases: call `list_connections` to see names, then use `execute_sql` (or other tools) with `"connection": "database1"` (or the name you configured) to run SQL on a specific database
 
 ---
 
@@ -151,7 +151,9 @@ This guide assumes you have downloaded the release zip containing the binary for
 
 - **execute_sql** — Run SQL on the configured database(s). Params: `sql`, optional `connection`. When more than one connection is configured, pass `connection` with one of the names from `list_connections`. Dangerous or DDL statements open a **confirmation window** that shows the **database alias** and **operation type** (with extra spacing for clarity). You must confirm before execution.
 - **execute_sql_file** — Read SQL from a file, apply the same review rules as `execute_sql`, then execute. Trailing SQL*Plus `/` is stripped. Params: `file_path`, optional `connection`.
-- **list_connections** — List configured connection names and availability. Use these as the `connection` argument in `execute_sql` or `execute_sql_file`.
+- **list_connections** — List configured connection names and availability. Use these as the `connection` argument in other tools. Only this tool re-validates failed connections; other tools fast-fail on an unavailable connection until you call list_connections again.
+- **query_to_csv_file** — Run a query and write the result to a file as CSV (header + rows, UTF-8, RFC 4180). Params: `sql`, `file_path` (absolute), optional `connection`. No confirmation dialog.
+- **query_to_text_file** — Run a query and write the result to a file as plain text (tab-separated, no header; CLOB in full; e.g. for procedure source). Params: `sql`, `file_path` (absolute), optional `connection`. No confirmation dialog.
 
 **Audit log** (`audit.log`, if enabled in config): each entry includes `CONNECTION=<alias>` so you can see which database was used (e.g. `CONNECTION=database1`, `CONNECTION=database2`).
 
@@ -166,6 +168,7 @@ This guide assumes you have downloaded the release zip containing the binary for
 | ORA-12541: TNS:no listener / SSL or wallet errors | TNS name or Wallet not found | For ADB with Wallet, set `TNS_ADMIN` in mcp.json `env` to the folder containing `tnsnames.ora` and wallet files. |
 | Error about missing config | config not found | Put config.yaml in the same folder as the binary, or set `ORACLE_MCP_CONFIG` to the config path. |
 | Oracle tools not visible in Cursor | MCP not loaded or wrong path | Check the `command` path in mcp.json and restart Cursor. |
+| Connection unavailable / fast-fail | Database down or unreachable | Fix the database/network, then call **list_connections** again to re-validate; only that tool retries and clears the unavailable state. |
 
 ---
 
@@ -311,8 +314,8 @@ This guide assumes you have downloaded the release zip containing the binary for
    - 保存 `mcp.json` 后重启 Cursor，以加载 MCP 服务
 
 4. **验证**
-   - 若对话中出现 Oracle 相关 MCP 工具（`execute_sql`、`execute_sql_file`、`list_connections`），说明配置成功
-   - 多数据库时：先调用 `list_connections` 查看名称，再在 `execute_sql` 中传入 `"connection": "database1"`（或你配置的名称）对指定库执行 SQL
+   - 若对话中出现 Oracle 相关 MCP 工具（`execute_sql`、`execute_sql_file`、`list_connections`、`query_to_csv_file`、`query_to_text_file`），说明配置成功
+   - 多数据库时：先调用 `list_connections` 查看名称，再在 `execute_sql` 等工具中传入 `"connection": "database1"`（或你配置的名称）对指定库执行
 
 ---
 
@@ -320,7 +323,9 @@ This guide assumes you have downloaded the release zip containing the binary for
 
 - **execute_sql** — 在已配置的数据库上执行 SQL。参数：`sql`，可选 `connection`。配置了多个连接时，传入 `list_connections` 返回的名称之一作为 `connection`。危险或 DDL 语句会弹出 **确认窗口**，显示 **数据库别名** 和 **操作类型**，需确认后才会执行。
 - **execute_sql_file** — 从文件读取 SQL，应用与 `execute_sql` 相同的审查规则后执行。末尾 SQL*Plus 的 `/` 会被去除。参数：`file_path`，可选 `connection`。
-- **list_connections** — 列出已配置连接名称及可用性。可将返回的名称作为 `execute_sql` 或 `execute_sql_file` 的 `connection` 参数。
+- **list_connections** — 列出已配置连接名称及可用性。可将返回的名称作为其他工具的 `connection` 参数。仅此工具会重新校验失败连接；其他工具在连接不可用时直接报错，需再次调用 list_connections 后重试。
+- **query_to_csv_file** — 执行查询并将结果以 CSV（表头+行，UTF-8，RFC 4180）写入文件。参数：`sql`、`file_path`（绝对路径），可选 `connection`。无确认对话框。
+- **query_to_text_file** — 执行查询并将结果以纯文本（制表符分隔、无表头；CLOB 完整，如存过程源码）写入文件。参数：`sql`、`file_path`（绝对路径），可选 `connection`。无确认对话框。
 
 **审计日志**（若在配置中启用 `audit.log`）：每条记录包含 `CONNECTION=<别名>`，便于查看使用的数据库（如 `CONNECTION=database1`、`CONNECTION=database2`）。
 
@@ -335,3 +340,4 @@ This guide assumes you have downloaded the release zip containing the binary for
 | ORA-12541: TNS:no listener / SSL 或钱包相关错误 | 找不到 TNS 名或 Wallet | 使用 ADB + Wallet 时，在 mcp.json 的 `env` 中设置 `TNS_ADMIN` 为包含 `tnsnames.ora` 和钱包文件的目录。 |
 | 报错找不到 config | 未找到配置文件 | 将 config.yaml 放在与可执行文件同一目录，或设置 `ORACLE_MCP_CONFIG` 指向配置文件路径。 |
 | Cursor 中看不到 Oracle 工具 | MCP 未加载或路径错误 | 检查 mcp.json 中 `command` 路径是否正确，并重启 Cursor。 |
+| 连接不可用 / 直接报错 | 数据库不可达或宕机 | 修复数据库/网络后，再次调用 **list_connections** 重新校验；仅该工具会重试并清除不可用状态。 |
