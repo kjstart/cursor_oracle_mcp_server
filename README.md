@@ -1,14 +1,21 @@
-![Logo](https://www.alvinliu.com/wp-content/uploads/2026/02/a3f08b34-d774-48ce-453b-67e6d5cdb981.png)
-
 [English](#english) | [中文](#chinese)
 
 <a id="english"></a>
 
+# New Project: Cursor DB MCP  
+Supports connecting to any database via JDBC.  
+👉[https://github.com/kjstart/cursor_db_mcp](https://github.com/kjstart/cursor_db_mcp)
+
+---
 # Oracle MCP Server
 
 A Model Context Protocol (MCP) server for Oracle Database, enabling AI assistants like Cursor to execute SQL statements directly against Oracle databases.
 
 **Alvin Liu** — [https://alvinliu.com](https://alvinliu.com) · **Project:** [https://github.com/kjstart/cursor_oracle_mcp_server](https://github.com/kjstart/cursor_oracle_mcp_server)
+
+## 🎬 Demo Video
+👉 Click the image below to watch on YouTube
+[![Cursor Oracle MCP Demo](https://www.alvinliu.com/wp-content/uploads/2026/02/oracle_mcp_youtube.png)](https://www.youtube.com/watch?v=3U1nWj9tP24)
 
 ## Features
 
@@ -363,11 +370,17 @@ MIT License - see [LICENSE](LICENSE) file
 
 [English](#english) | [中文](#chinese)
 
+# 新项目 Cursor DB MCP 可以连接到各种数据库产品(包括OceanBase等信创数据库)
+👉[https://github.com/kjstart/cursor_db_mcp](https://github.com/kjstart/cursor_db_mcp)
+
+---
 # Oracle MCP Server（中文）
 
 基于 Model Context Protocol (MCP) 的 Oracle 数据库服务端，让 Cursor 等 AI 助手直接对 Oracle 数据库执行 SQL。
 
 **作者：Alvin Liu** — [https://alvinliu.com](https://alvinliu.com) · **项目：** [https://github.com/kjstart/cursor_oracle_mcp_server](https://github.com/kjstart/cursor_oracle_mcp_server)
+
+B站视频介绍: [Cursor连接Oracle自动编写存储过程](https://www.bilibili.com/video/BV1EbfLBREDC)
 
 ## 功能
 
