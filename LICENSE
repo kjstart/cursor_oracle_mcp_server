@@ -1,21 +1,19 @@
-MIT License
+Software License & Disclaimer
+1. Grant of License
+This software ("cursor_oracle_mcp_server") is licensed to the user ("Licensee") under a non-exclusive, non-transferable, and limited license. The Licensee is authorized to use the software for its intended purpose of interfacing with Oracle databases via the Model Context Protocol (MCP).
 
-Copyright (c) 2026 kjstart
+2. Third-Party Software and Trademarks
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Oracle Compatibility: This software includes or redistributes components of the Oracle Linux operating system and Oracle Instant Client. These components are the property of Oracle Corporation and are redistributed under the Oracle Free Use and Redistribution License.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Trademark Notice: "Oracle", "Oracle Linux", and "Oracle SCM" are registered trademarks of Oracle Corporation. This software is not endorsed by, affiliated with, or supported by Oracle Corporation. It is an independent third-party tool developed by [Your Name/Alvin Not On Call].
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. Disclaimer of Warranty (AS-IS)
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+4. Limitation of Liability
+The Author shall not be held responsible for any data loss, database corruption, or security breaches resulting from the use of this software. It is the Licensee's sole responsibility to ensure that database credentials and configurations are managed securely and in compliance with their organization’s security policies.
+
+5. Commercial Use and Licensing
+[Optional: Use this if you plan to charge]
+Use of the Professional features of this software requires a valid License Key. Unauthorized distribution, reverse engineering, or bypass of the licensing mechanism is strictly prohibited.
