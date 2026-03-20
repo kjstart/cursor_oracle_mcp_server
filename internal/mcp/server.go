@@ -523,8 +523,6 @@ func (s *Server) handleExecuteSQLFile(req *jsonRPCRequest, args map[string]inter
 		s.sendToolError(req.ID, "File is empty")
 		return
 	}
-	// Strip trailing SQL*Plus "/" (on its own line); driver does not need it and may error
-	sql = stripTrailingSlashLine(sql)
 
 	connectionName := ""
 	if c, ok := args["connection"]; ok && c != nil {
@@ -884,27 +882,4 @@ func connectionIndexInPool(pool *oracle.ExecutorPool, displayName string) int {
 		}
 	}
 	return 0
-}
-
-// stripTrailingSlashLine removes trailing lines that are only "/" (SQL*Plus execute buffer command).
-// The Oracle driver does not understand "/"; leaving it can cause errors when executing file content.
-func stripTrailingSlashLine(s string) string {
-	for {
-		s = strings.TrimSuffix(s, "\r\n")
-		s = strings.TrimSuffix(s, "\n")
-		s = strings.TrimSuffix(s, "\r")
-		last := strings.LastIndex(s, "\n")
-		if last == -1 {
-			if strings.TrimSpace(s) == "/" {
-				return ""
-			}
-			return s
-		}
-		line := s[last+1:]
-		if strings.TrimSpace(line) == "/" {
-			s = s[:last]
-			continue
-		}
-		return s
-	}
 }

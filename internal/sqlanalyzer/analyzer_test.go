@@ -207,6 +207,17 @@ func TestAnalyzer_Analyze_WholeText(t *testing.T) {
 	}
 }
 
+func TestIsSingleStatementBlock_LeadingLineComments(t *testing.T) {
+	// Segments from SQL*Plus-style files often start with -- headers before BEGIN/DECLARE.
+	sql := "-- file header\n-- more\n\nBEGIN\n  NULL;\nEND;"
+	if !IsSingleStatementBlock(sql) {
+		t.Errorf("IsSingleStatementBlock(...) = false, want true")
+	}
+	if !KeepTrailingSemicolon(sql) {
+		t.Errorf("KeepTrailingSemicolon(...) = false, want true (anonymous PL/SQL needs trailing ;)")
+	}
+}
+
 func TestIsPLSQLCreationDDL_EndVariants(t *testing.T) {
 	// CREATE FUNCTION/PROCEDURE must be recognized as single block whether END has optional name or not.
 	tests := []struct {

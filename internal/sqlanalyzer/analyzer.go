@@ -152,8 +152,78 @@ func IsSingleStatementBlock(sql string) bool {
 	return isPLSQLCreationDDL(sql) || isAnonymousBlock(sql)
 }
 
+// trimLeadingLineComments removes leading blank lines and full lines that are only -- line comments.
+// Used so BEGIN...END; blocks in SQL*Plus-style segments (after splitting on "/") are recognized
+// even when the segment starts with header comments.
+func trimLeadingLineComments(sql string) string {
+	s := strings.ReplaceAll(strings.TrimSpace(sql), "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	for s != "" {
+		idx := strings.IndexByte(s, '\n')
+		var line string
+		if idx < 0 {
+			line = s
+			s = ""
+		} else {
+			line = s[:idx]
+			s = s[idx+1:]
+		}
+		t := strings.TrimSpace(line)
+		if t == "" {
+			continue
+		}
+		if strings.HasPrefix(t, "--") {
+			continue
+		}
+		// First substantive line: keep it and the rest of the script
+		if idx < 0 {
+			return strings.TrimSpace(line)
+		}
+		return strings.TrimSpace(line + "\n" + s)
+	}
+	return ""
+}
+
+// lastNonEmptyLine returns the last non-empty line (trimmed) in lower-case text.
+func lastNonEmptyLine(lower string) string {
+	lines := strings.Split(lower, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		t := strings.TrimSpace(lines[i])
+		if t != "" {
+			return t
+		}
+	}
+	return ""
+}
+
+// looksLikePlsqlBlockEnd is true when the last non-empty line is the block-closing END (or END label),
+// but not END IF / END LOOP / END CASE.
+func looksLikePlsqlBlockEnd(lower string) bool {
+	last := lastNonEmptyLine(lower)
+	if last == "" {
+		return false
+	}
+	if last == "end" {
+		return true
+	}
+	if !strings.HasPrefix(last, "end ") {
+		return false
+	}
+	rest := strings.TrimSpace(strings.TrimPrefix(last, "end"))
+	if rest == "" {
+		return true
+	}
+	first := strings.Fields(rest)[0]
+	switch first {
+	case "if", "loop", "case":
+		return false
+	default:
+		return true // END some_label
+	}
+}
+
 func isAnonymousBlock(sql string) bool {
-	trimmed := strings.TrimSpace(sql)
+	trimmed := strings.TrimSpace(trimLeadingLineComments(sql))
 	if trimmed == "" {
 		return false
 	}
@@ -161,7 +231,9 @@ func isAnonymousBlock(sql string) bool {
 		trimmed = strings.TrimSuffix(trimmed, ";")
 	}
 	lower := strings.ToLower(trimmed)
-	hasEnd := strings.Contains(lower, " end ") || strings.HasSuffix(lower, " end")
+	hasEnd := strings.Contains(lower, " end ") ||
+		strings.HasSuffix(lower, " end") ||
+		looksLikePlsqlBlockEnd(lower)
 	return (strings.HasPrefix(lower, "begin") || strings.HasPrefix(lower, "declare")) && hasEnd
 }
 

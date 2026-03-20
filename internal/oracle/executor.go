@@ -74,7 +74,10 @@ func (e *Executor) Close() error {
 }
 
 // Execute runs the given SQL (single or multiple statements) and returns the result.
-// Multiple statements are split by semicolon at end of line; single PL/SQL blocks (CREATE PROC...END;, BEGIN...END;) are not split.
+// Order: (1) lines that are only "/" split like SQL*Plus/SQLcl — must run before IsSingleStatementBlock,
+// otherwise a script that starts with BEGIN and contains " end " (e.g. END IF) is misclassified as one
+// anonymous block and "/" is sent to Oracle. (2) single PL/SQL creation or anonymous block. (3) split on ";\n".
+// Each fragment is executed via the existing driver (godror / ODPI-C, typically with Instant Client).
 func (e *Executor) Execute(ctx context.Context, sqlText string, statementType string) (*ExecutionResult, error) {
 	start := time.Now()
 	result := &ExecutionResult{
@@ -86,34 +89,40 @@ func (e *Executor) Execute(ctx context.Context, sqlText string, statementType st
 	normalized = strings.ReplaceAll(normalized, "\r", "\n")
 
 	var statements []string
-	if sqlanalyzer.IsSingleStatementBlock(normalized) {
+	if hasStandaloneSlashLine(normalized) {
+		// SQL*Plus / SQLcl: "/" on its own line terminates a PL/SQL buffer. Splitting on ";\n"
+		// breaks blocks that contain semicolons inside BEGIN...END.
+		statements = splitBySlashLines(normalized)
+	} else if sqlanalyzer.IsSingleStatementBlock(normalized) {
 		statements = []string{normalized}
 	} else {
 		statements = splitStatements(normalized)
 	}
 
-	for _, st := range statements {
-		st = strings.TrimSpace(st)
-		if st == "" {
-			continue
-		}
-		if !strings.HasSuffix(st, ";") {
-			st = st + ";"
-		}
-		// Keep trailing semicolon for PL/SQL creation and anonymous blocks (BEGIN...END;) so Oracle compiles/runs correctly
-		if !sqlanalyzer.KeepTrailingSemicolon(st) {
-			st = strings.TrimSuffix(st, ";") // Oracle driver does not want trailing semicolon for ordinary SQL
-		}
-		st = strings.TrimSpace(st)
-		upper := strings.ToUpper(st)
-		isQuery := strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH")
-		if isQuery {
-			if err := e.executeQuery(ctx, st, result); err != nil {
-				return nil, err
+	for _, raw := range statements {
+		for _, st := range expandStatementSegment(raw) {
+			st = strings.TrimSpace(st)
+			if st == "" {
+				continue
 			}
-		} else {
-			if err := e.executeStatement(ctx, st, result); err != nil {
-				return nil, err
+			if !strings.HasSuffix(st, ";") {
+				st = st + ";"
+			}
+			// Keep trailing semicolon for PL/SQL creation and anonymous blocks (BEGIN...END;) so Oracle compiles/runs correctly
+			if !sqlanalyzer.KeepTrailingSemicolon(st) {
+				st = strings.TrimSuffix(st, ";") // Oracle driver does not want trailing semicolon for ordinary SQL
+			}
+			st = strings.TrimSpace(st)
+			upper := strings.ToUpper(st)
+			isQuery := strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH")
+			if isQuery {
+				if err := e.executeQuery(ctx, st, result); err != nil {
+					return nil, err
+				}
+			} else {
+				if err := e.executeStatement(ctx, st, result); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -124,6 +133,63 @@ func (e *Executor) Execute(ctx context.Context, sqlText string, statementType st
 		result.Warning = "DDL statements are auto-committed in Oracle"
 	}
 	return result, nil
+}
+
+// hasStandaloneSlashLine reports whether the script uses a line containing only "/" (SQL*Plus run buffer).
+func hasStandaloneSlashLine(sql string) bool {
+	for _, line := range strings.Split(sql, "\n") {
+		if strings.TrimSpace(line) == "/" {
+			return true
+		}
+	}
+	return false
+}
+
+// splitBySlashLines splits a script on lines that are only "/" (after trim). Those lines are not
+// sent to Oracle. Empty segments are skipped.
+func splitBySlashLines(sql string) []string {
+	var parts []string
+	var b strings.Builder
+	firstLine := true
+	for _, line := range strings.Split(sql, "\n") {
+		if strings.TrimSpace(line) == "/" {
+			if p := strings.TrimSpace(b.String()); p != "" {
+				parts = append(parts, p)
+			}
+			b.Reset()
+			firstLine = true
+			continue
+		}
+		if !firstLine {
+			b.WriteByte('\n')
+		}
+		b.WriteString(line)
+		firstLine = false
+	}
+	if p := strings.TrimSpace(b.String()); p != "" {
+		parts = append(parts, p)
+	}
+	return parts
+}
+
+// expandStatementSegment splits one chunk from the script (e.g. between "/" lines) into executable pieces:
+// nested "/" lines (each sub-chunk expanded again), else a single PL/SQL block, else ";\n"-separated statements.
+func expandStatementSegment(sql string) []string {
+	sql = strings.TrimSpace(sql)
+	if sql == "" {
+		return nil
+	}
+	if hasStandaloneSlashLine(sql) {
+		var out []string
+		for _, chunk := range splitBySlashLines(sql) {
+			out = append(out, expandStatementSegment(chunk)...)
+		}
+		return out
+	}
+	if sqlanalyzer.IsSingleStatementBlock(sql) {
+		return []string{sql}
+	}
+	return splitStatements(sql)
 }
 
 // splitStatements splits SQL by semicolon at end of line (;\n). Used for multi-statement scripts.
