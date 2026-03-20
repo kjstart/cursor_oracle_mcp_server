@@ -6,7 +6,7 @@ This software ("cursor_oracle_mcp_server") is licensed to the user ("Licensee") 
 
 Oracle Compatibility: This software includes or redistributes components of the Oracle Linux operating system and Oracle Instant Client. These components are the property of Oracle Corporation and are redistributed under the Oracle Free Use and Redistribution License.
 
-Trademark Notice: "Oracle" and "Oracle Linux" are registered trademarks of Oracle Corporation. This software is not endorsed by, affiliated with, or supported by Oracle Corporation. It is an independent third-party tool developed by [Your Name/Alvin Not On Call].
+Trademark Notice: "Oracle" and "Oracle Linux" are registered trademarks of Oracle Corporation. This software is not endorsed by, affiliated with, or supported by Oracle Corporation. It is an independent third-party tool developed by Alvin Liu.
 
 3. Disclaimer of Warranty (AS-IS)
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
@@ -15,5 +15,4 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 The Author shall not be held responsible for any data loss, database corruption, or security breaches resulting from the use of this software. It is the Licensee's sole responsibility to ensure that database credentials and configurations are managed securely and in compliance with their organization’s security policies.
 
 5. Commercial Use and Licensing
-[Optional: Use this if you plan to charge]
-Use of the Professional features of this software requires a valid License Key. Unauthorized distribution, reverse engineering, or bypass of the licensing mechanism is strictly prohibited.
+Commercial use of this software requires a valid License Key. Unauthorized distribution, reverse engineering, or bypass of the licensing mechanism is strictly prohibited.
