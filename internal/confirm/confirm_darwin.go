@@ -11,12 +11,15 @@ import (
 
 // ConfirmRequest contains the data for a confirmation dialog.
 type ConfirmRequest struct {
-	SQL             string
-	MatchedKeywords []string
-	StatementType   string
-	IsDDL           bool
-	Connection      string // Database alias from config (e.g. "database1", "database2") for title/display
-	SourceLabel     string // Optional, e.g. "File: path/to/file.sql" for execute_sql_file
+	SQL                         string
+	MatchedKeywords             []string
+	MatchedKeywordsForHighlight []string
+	MatchedActions              []string
+	StatementType               string
+	IsDDL                       bool
+	Connection                  string
+	ConnectionIndex             int
+	SourceLabel                 string
 }
 
 // Confirmer handles user confirmation dialogs on macOS.

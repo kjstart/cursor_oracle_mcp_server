@@ -438,6 +438,7 @@ func (s *Server) handleExecuteSQL(req *jsonRPCRequest, args map[string]interface
 			StatementType:   stmtType,
 			IsDDL:           analysis.IsDDL,
 			Connection:      displayConnection,
+			ConnectionIndex: connectionIndexInPool(s.executorPool, displayConnection),
 		}
 
 		approved, err := s.confirmer.Confirm(confirmReq)
@@ -552,6 +553,7 @@ func (s *Server) handleExecuteSQLFile(req *jsonRPCRequest, args map[string]inter
 			StatementType:   stmtType,
 			IsDDL:           analysis.IsDDL,
 			Connection:      displayConnection,
+			ConnectionIndex: connectionIndexInPool(s.executorPool, displayConnection),
 			SourceLabel:     "File: " + filePath,
 		}
 
@@ -869,6 +871,19 @@ func (s *Server) logAudit(sql string, keywords []string, approved bool, action s
 	if s.auditor != nil {
 		s.auditor.Log(sql, keywords, approved, action, connection)
 	}
+}
+
+// connectionIndexInPool returns the 0-based index of the named connection for review UI header color (Java parity).
+func connectionIndexInPool(pool *oracle.ExecutorPool, displayName string) int {
+	if pool == nil || displayName == "" {
+		return 0
+	}
+	for i, n := range pool.Names() {
+		if n == displayName {
+			return i
+		}
+	}
+	return 0
 }
 
 // stripTrailingSlashLine removes trailing lines that are only "/" (SQL*Plus execute buffer command).

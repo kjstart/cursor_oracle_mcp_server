@@ -30,6 +30,8 @@ A Model Context Protocol (MCP) server for Oracle Database, enabling AI assistant
 - **Cross-platform**: Windows (WinForms + WebBrowser for review), macOS (osascript dialog)
 - **Single executable**: Standalone binary (requires Oracle Instant Client)
 
+<img src="https://www.alvinliu.com/wp-content/uploads/2026/03/db_mcp_color_bar.png" alt="db_mcp confirmation window" />
+
 ## Requirements
 
 ### Runtime Dependencies
@@ -394,6 +396,8 @@ B站视频介绍: [Cursor连接Oracle自动编写存储过程](https://www.bilib
 - **审计日志**：键值字段（`AUDIT_TIME`、`AUDIT_CONNECTION`、`AUDIT_KEYWORDS`、`AUDIT_APPROVED`、`AUDIT_ACTION`、`AUDIT_SQL`）、完整 SQL、记录分隔符 `######AUDIT_END######`；单文件 10MB 轮转，启动时复用最近未满的日志，文件名含创建日期（如 `audit_2006-01-02_150405.log`）
 - **跨平台**：Windows（WinForms + WebBrowser 确认）、macOS（osascript 对话框）
 - **单可执行文件**：独立二进制（需安装 Oracle Instant Client）
+
+<img src="https://www.alvinliu.com/wp-content/uploads/2026/03/db_mcp_color_bar.png" alt="db_mcp confirmation window" />
 
 ## 环境要求
 

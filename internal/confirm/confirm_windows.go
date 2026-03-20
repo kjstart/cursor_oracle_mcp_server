@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -43,9 +44,14 @@ const (
 type ConfirmRequest struct {
 	SQL             string
 	MatchedKeywords []string
-	StatementType   string
-	IsDDL           bool
-	Connection      string // Database alias from config (e.g. "database1", "database2") for title/display
+	// MatchedKeywordsForHighlight, if non-empty, limits red keyword markup to these terms (Java: hits on formatted text only).
+	MatchedKeywordsForHighlight []string
+	MatchedActions              []string // command_match statement types (Java parity); merged into red highlight when set
+	StatementType               string
+	IsDDL                       bool
+	Connection                  string // Database alias from config (e.g. "database1", "database2") for title/display
+	// ConnectionIndex is the 0-based index in the configured connections list; selects header bar color (same palette as Java).
+	ConnectionIndex int
 	SourceLabel     string // Optional, e.g. "File: path/to/file.sql" for execute_sql_file
 }
 
@@ -67,6 +73,7 @@ func (c *Confirmer) Confirm(req *ConfirmRequest) (bool, error) {
 	headerPath := filepath.Join(sqlDir, "oracle-mcp-confirm-header.txt")
 
 	htmlContent := sqlHighlightHTML(req.SQL)
+	htmlContent = highlightMatchedKeywordsInHTML(htmlContent, highlightTermsForReview(req))
 	if err := os.WriteFile(htmlPath, []byte(htmlContent), 0600); err != nil {
 		return false, fmt.Errorf("confirm: cannot write HTML temp file: %w", err)
 	}
@@ -88,9 +95,11 @@ func (c *Confirmer) Confirm(req *ConfirmRequest) (bool, error) {
 		connectionArg = "default"
 	}
 
+	headerColor := headerBarColor(req.ConnectionIndex)
+
 	// -STA required for Windows Forms to display correctly
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-File", scriptPath,
-		"-HtmlPath", htmlPath, "-ResultPath", resultPath, "-HeaderPath", headerPath, "-Connection", connectionArg)
+		"-HtmlPath", htmlPath, "-ResultPath", resultPath, "-HeaderPath", headerPath, "-Connection", connectionArg, "-HeaderColor", headerColor)
 	cmd.Stdin = nil
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
@@ -127,7 +136,9 @@ func buildConfirmHeader(req *ConfirmRequest) string {
 	if req.Connection != "" {
 		line1 = append(line1, "Database: "+req.Connection)
 	}
-	if req.StatementType != "" {
+	if len(req.MatchedActions) > 0 {
+		line1 = append(line1, "Action: "+strings.Join(req.MatchedActions, ", "))
+	} else if req.StatementType != "" {
 		line1 = append(line1, "Action: "+req.StatementType)
 	}
 	if len(req.MatchedKeywords) > 0 {
@@ -152,6 +163,86 @@ func buildConfirmHeader(req *ConfirmRequest) string {
 	return out
 }
 
+// Same palette as Java Confirmer.HEADER_COLORS (connection index mod length).
+var headerBarColors = []string{
+	"A5D6A7", "90CAF9", "FFCC80", "CE93D8", "F48FB1",
+	"80DEEA", "EF9A9A", "80CBC4", "FFF59D", "BCAAA4",
+}
+
+func headerBarColor(connectionIndex int) string {
+	if connectionIndex < 0 {
+		connectionIndex = 0
+	}
+	return headerBarColors[connectionIndex%len(headerBarColors)]
+}
+
+var tagOrTextRE = regexp.MustCompile(`(<[^>]+>)|([^<]+)`)
+
+const highlightSpanStart = `<span style="color:red;font-weight:bold">`
+const highlightSpanEnd = `</span>`
+
+// highlightTermsForReview merges keyword and action strings for red markup (aligned with Java Confirmer).
+func highlightTermsForReview(req *ConfirmRequest) []string {
+	seen := make(map[string]struct{})
+	var out []string
+	add := func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return
+		}
+		key := strings.ToLower(s)
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		out = append(out, s)
+	}
+	kwSrc := req.MatchedKeywords
+	if len(req.MatchedKeywordsForHighlight) > 0 {
+		kwSrc = req.MatchedKeywordsForHighlight
+	}
+	for _, k := range kwSrc {
+		add(k)
+	}
+	for _, a := range req.MatchedActions {
+		add(a)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.Slice(out, func(i, j int) bool { return len(out[i]) > len(out[j]) })
+	return out
+}
+
+// highlightMatchedKeywordsInHTML wraps whole-word (case-insensitive) matches in text nodes only, like Java Confirmer.
+func highlightMatchedKeywordsInHTML(htmlDoc string, terms []string) string {
+	if htmlDoc == "" || len(terms) == 0 {
+		return htmlDoc
+	}
+	var patterns []*regexp.Regexp
+	for _, term := range terms {
+		patterns = append(patterns, regexp.MustCompile(`(?i)\b`+regexp.QuoteMeta(term)+`\b`))
+	}
+	var sb strings.Builder
+	subs := tagOrTextRE.FindAllStringSubmatchIndex(htmlDoc, -1)
+	for _, loc := range subs {
+		if loc[2] >= 0 && loc[3] >= 0 {
+			sb.WriteString(htmlDoc[loc[2]:loc[3]])
+			continue
+		}
+		if loc[4] >= 0 && loc[5] >= 0 {
+			text := htmlDoc[loc[4]:loc[5]]
+			for _, re := range patterns {
+				text = re.ReplaceAllStringFunc(text, func(m string) string {
+					return highlightSpanStart + m + highlightSpanEnd
+				})
+			}
+			sb.WriteString(text)
+		}
+	}
+	return sb.String()
+}
+
 // sqlKeywords for Oracle/PL-SQL syntax highlighting (lowercase for matching).
 var sqlKeywords = []string{
 	"create", "or", "replace", "procedure", "function", "package", "body", "begin", "end", "declare",
@@ -172,7 +263,8 @@ func sqlHighlightHTML(sql string) string {
 		classKeyword = "kw"
 		classString  = "str"
 		classComment = "cm"
-		classNumber = "num"
+		classNumber  = "num"
+		classIdent   = "id"
 	)
 	// Build keyword regex: \b(word1|word2|...)\b
 	kwPattern := `\b(` + strings.Join(sqlKeywords, "|") + `)\b`
@@ -193,10 +285,31 @@ func sqlHighlightHTML(sql string) string {
 .sql-wrap .str { color: #cf2222; }
 .sql-wrap .cm { color: #57606a; }
 .sql-wrap .num { color: #116329; }
+.sql-wrap .id { color: #953800; }
 </style></head><body class="sql-wrap"><code>`)
 
 	i := 0
 	for i < len(sql) {
+		// Double-quoted identifier (e.g. Oracle); do not treat as keyword (Java BaseFormatter).
+		if sql[i] == '"' {
+			start := i
+			i++
+			for i < len(sql) {
+				if sql[i] == '"' {
+					i++
+					if i < len(sql) && sql[i] == '"' {
+						i++
+						continue
+					}
+					break
+				}
+				i++
+			}
+			out.WriteString(`<span class="` + classIdent + `">`)
+			out.WriteString(escapeForDisplay(sql[start:i]))
+			out.WriteString("</span>")
+			continue
+		}
 		// String literal (single-quoted, allow '' inside)
 		if sql[i] == '\'' {
 			start := i
@@ -340,7 +453,7 @@ func truncateSQL(sql string, maxLen int) string {
 
 // ps1Script is the PowerShell script for the confirmation form (WebBrowser with HTML syntax-highlighted SQL).
 const ps1Script = `
-param([string]$HtmlPath, [string]$ResultPath, [string]$HeaderPath, [string]$Connection = "default")
+param([string]$HtmlPath, [string]$ResultPath, [string]$HeaderPath, [string]$Connection = "default", [string]$HeaderColor = "A5D6A7")
 $Header = if (Test-Path $HeaderPath) { [System.IO.File]::ReadAllText($HeaderPath, [System.Text.Encoding]::UTF8) } else { "Confirm SQL execution" }
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -354,6 +467,11 @@ $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::Sizable
 $form.MinimumSize = New-Object System.Drawing.Size(800, 600)
 $form.TopMost = $true
 
+$headerPanel = New-Object System.Windows.Forms.Panel
+$headerPanel.Dock = [System.Windows.Forms.DockStyle]::Top
+$headerPanel.Height = 42
+if (-not $HeaderColor.StartsWith('#')) { $HeaderColor = '#' + $HeaderColor }
+try { $headerPanel.BackColor = [System.Drawing.ColorTranslator]::FromHtml($HeaderColor) } catch { $headerPanel.BackColor = [System.Drawing.Color]::FromArgb(165, 214, 167) }
 $lbl = New-Object System.Windows.Forms.Label
 $lbl.Text = $Header.Trim()
 $lbl.Location = New-Object System.Drawing.Point(10, 10)
@@ -362,11 +480,12 @@ $lbl.MaximumSize = New-Object System.Drawing.Size(960, 0)
 if ($Connection -and $Connection -ne "default") {
 	$lbl.Font = New-Object System.Drawing.Font($lbl.Font.FontFamily, $lbl.Font.Size, [System.Drawing.FontStyle]::Bold)
 }
-$form.Controls.Add($lbl)
+$headerPanel.Controls.Add($lbl)
+$form.Controls.Add($headerPanel)
 
 $browser = New-Object System.Windows.Forms.WebBrowser
-$browser.Location = New-Object System.Drawing.Point(10, 40)
-$browser.Size = New-Object System.Drawing.Size(965, 620)
+$browser.Location = New-Object System.Drawing.Point(10, 42)
+$browser.Size = New-Object System.Drawing.Size(965, 618)
 $browser.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
 $browser.ScrollBarsEnabled = $true
 $browser.IsWebBrowserContextMenuEnabled = $false
