@@ -462,7 +462,9 @@ func (s *Server) handleExecuteSQL(req *jsonRPCRequest, args map[string]interface
 	ctx := context.Background()
 	result, err := s.executorPool.Execute(ctx, connectionName, sql, stmtType)
 	if err != nil {
-		s.logAudit(sql, analysis.MatchedKeywords, false, "EXECUTION_ERROR: "+err.Error(), displayConnection)
+		// Approved=true: execution was attempted after passing confirmation (or confirmation was not required).
+		// Do not use false here — that would imply USER_REJECTED while ORA-* proves the server ran the statement.
+		s.logAudit(sql, analysis.MatchedKeywords, true, "EXECUTION_ERROR: "+err.Error(), displayConnection)
 		s.sendToolError(req.ID, fmt.Sprintf("SQL execution failed: %v", err))
 		return
 	}
@@ -575,7 +577,7 @@ func (s *Server) handleExecuteSQLFile(req *jsonRPCRequest, args map[string]inter
 	ctx := context.Background()
 	result, err := s.executorPool.Execute(ctx, connectionName, sql, stmtType)
 	if err != nil {
-		s.logAudit(sql, analysis.MatchedKeywords, false, "EXECUTION_ERROR: "+err.Error(), displayConnection)
+		s.logAudit(sql, analysis.MatchedKeywords, true, "EXECUTION_ERROR: "+err.Error(), displayConnection)
 		s.sendToolError(req.ID, fmt.Sprintf("SQL execution failed: %v", err))
 		return
 	}
